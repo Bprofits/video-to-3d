@@ -179,12 +179,20 @@ function calculateFrameStats(imageData) {
 }
 
 // -----------------------------------------------
-// ENHANCED CLAUDE VISION ANALYSIS
+// PRESET COMMANDS — type /command in briefing fields
 // -----------------------------------------------
+const PRESETS = {
+  driveai: {
+    business: "Drive AI Sales Inc. — AI-powered automation for car dealerships. Website: https://driveaisales.com",
+    style: "Dark cinematic with orange (#E87A00) and black (#070707) brand colors, cream (#F4DEC9) accents. Premium automotive tech feel — holographic, futuristic, high-end.",
+    effects: "Particle morphing between shapes (DNA helix, engine, drivetrain, neural network). Scatter transitions, additive blending glow, reflective floor, fog. Camera orbits and dollies. Intense visual journey.",
+  },
+};
+
 // -----------------------------------------------
 // TWO-STAGE ANALYSIS PIPELINE
-// Stage 1: Video → structured scene spec (JSON)
-// Stage 2: Scene spec + skills → complete HTML code
+// Stage 1: Video + briefing → structured scene spec (JSON)
+// Stage 2: Scene spec + skills → complete HTML (pure visual FX, no text)
 // -----------------------------------------------
 
 async function callClaude(apiKey, messages, maxTokens, system) {
@@ -210,8 +218,8 @@ async function callClaude(apiKey, messages, maxTokens, system) {
   return data.content?.map((c) => c.text || "").join("") || "";
 }
 
-// STAGE 1: Analyze video frames → structured scene specification
-async function analyzeVideoToSpec(frames, duration, apiKey, videoWidth, videoHeight, onProgress) {
+// STAGE 1: Analyze video frames + briefing → structured scene specification
+async function analyzeVideoToSpec(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
   const motionSummary = frames.map((f, i) =>
     `Frame ${i + 1} (t=${f.time.toFixed(1)}s): motion=${f.motion.magnitude.toFixed(2)} brightness=${f.brightness.toFixed(2)}`
   ).join("\n");
@@ -233,10 +241,15 @@ async function analyzeVideoToSpec(frames, duration, apiKey, videoWidth, videoHei
 
 Motion data: ${motionSummary}
 
-Produce a detailed SCENE SPECIFICATION as JSON. Study each frame carefully and describe:
+USER BRIEFING:
+- Business/Context: ${briefing.business || "Not specified"}
+- Visual Style: ${briefing.style || "Match the video's aesthetic"}
+- Desired Effects: ${briefing.effects || "Match the video's effects and transitions"}
+
+Produce a detailed SCENE SPECIFICATION as JSON. Study each frame carefully. This is for a PURE VISUAL EFFECTS experience — NO text overlays, NO web design, NO typography. Just raw Three.js visual spectacle.
 
 {
-  "title": "descriptive title for the experience",
+  "title": "descriptive title for the visual experience",
   "mood": "dark cinematic | bright minimal | neon tech | organic nature | etc",
   "color_palette": {
     "background": "#hex",
@@ -250,8 +263,8 @@ Produce a detailed SCENE SPECIFICATION as JSON. Study each frame carefully and d
       "id": 1,
       "start_time": 0.0,
       "end_time": 3.5,
-      "description": "detailed description of what's visible",
-      "visual_elements": ["particles forming a car shape", "orange glow", "reflective floor"],
+      "description": "detailed description of the visual effect",
+      "visual_elements": ["particles forming a shape", "orange glow", "reflective floor"],
       "dominant_colors": ["#E87A00", "#112240"],
       "threejs_technique": "particles | geometry | shader | combination",
       "camera": {
@@ -265,15 +278,11 @@ Produce a detailed SCENE SPECIFICATION as JSON. Study each frame carefully and d
   "global_effects": ["bloom", "particles", "fog", "scan lines", "etc"],
   "scroll_structure": {
     "total_sections": 6,
-    "section_heights_vh": [100, 150, 100, 150, 100, 100],
-    "pin_sections": [0, 2, 4]
-  },
-  "text_overlays": [
-    {"section": 0, "position": "left", "heading": "suggested heading", "body": "suggested body text"}
-  ]
+    "section_heights_vh": [100, 150, 100, 150, 100, 100]
+  }
 }
 
-Be extremely detailed about the visual elements. Describe exactly what shapes, colors, effects, and movements you see in each scene. This spec will be used to generate Three.js code.
+Be extremely detailed about the visual elements. Describe exactly what shapes, colors, effects, and movements should create a visually immersive scroll-driven experience. NO text overlays — pure visual FX only.
 
 Respond with ONLY valid JSON. No markdown fences.`
       }
@@ -291,36 +300,49 @@ Respond with ONLY valid JSON. No markdown fences.`
   return spec;
 }
 
-// STAGE 2: Scene spec + skills → complete HTML code
-async function generateCodeFromSpec(spec, apiKey, onProgress) {
-  onProgress && onProgress("Generating Three.js code...");
+// STAGE 2: Scene spec + skills → complete HTML (PURE VISUAL FX — no text)
+async function generateCodeFromSpec(spec, briefing, apiKey, onProgress) {
+  onProgress && onProgress("Generating Three.js visual effects...");
 
   const rawHTML = await callClaude(apiKey, [{
     role: "user",
-    content: `You are an expert Three.js developer. Generate a COMPLETE, production-quality, single-file HTML page based on this scene specification:
+    content: `You are an expert Three.js visual effects developer. Generate a COMPLETE, production-quality, single-file HTML page that creates a PURE VISUAL EXPERIENCE based on this scene specification:
 
 ${JSON.stringify(spec, null, 2)}
 
+${briefing.business ? `BUSINESS CONTEXT: ${briefing.business}` : ""}
+${briefing.style ? `VISUAL STYLE: ${briefing.style}` : ""}
+${briefing.effects ? `DESIRED EFFECTS: ${briefing.effects}` : ""}
+
+THIS IS A PURE VISUAL FX PAGE — NO TEXT, NO HEADINGS, NO PARAGRAPHS, NO WEB DESIGN.
+The ENTIRE page is just the Three.js canvas filling the screen with scroll-driven visual effects.
+Think of it as a visual trip — particles morphing, shapes forming, cameras sweeping, colors shifting.
+
 REQUIREMENTS:
-1. Scroll-driven - scrolling progresses through the visual experience
-2. Fixed fullscreen Three.js canvas behind content
-3. Recreate EVERY visual element described in the spec using the appropriate technique:
+1. Scroll-driven — scrolling progresses through the visual experience
+2. FULLSCREEN Three.js canvas — NO HTML text overlays, NO sections with text, NO typography
+3. The scroll-spacer div should be invisible — just provides scroll height for the visual journey
+4. Recreate EVERY visual element described in the spec:
    - Particles: BufferGeometry + Float32Array + PointsMaterial with CanvasTexture sprites
    - Shapes: custom geometry built from mathematical functions
    - Glow: AdditiveBlending, emissive colors, sprite halos
    - Transitions: lerp particle positions between shapes, scatter/reform effects
-4. Match the EXACT color palette from the spec
-5. Include text overlays that fade in/out at the right scroll positions
+5. Match the EXACT color palette from the spec
 6. Camera follows the described movements, tied to scroll position
 7. Use ONLY vanilla Three.js from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
 8. Single HTML file, inline CSS and JS, works on file:// protocol
-9. Premium quality - smooth animations, proper easing, professional typography
+9. MAXIMUM visual impact — particle effects, smooth transitions, dynamic lighting, fog, glow
+
+HTML STRUCTURE (simple):
+<body style="margin:0;overflow-x:hidden;background:#000">
+  <canvas id="bg" style="position:fixed;top:0;left:0;width:100%;height:100%"></canvas>
+  <div style="height:600vh"></div>  <!-- scroll spacer only -->
+</body>
 
 SCROLL ANIMATION PATTERNS:
 - Use window scroll event listener with passive:true
 - Map scrollTop / (scrollHeight - innerHeight) to 0-1 progress
-- Use scroll progress to drive camera position, particle morphing, text reveals
-- For section-based content: calculate which section is active from progress
+- Use scroll progress to drive camera position, particle morphing, lighting changes
 - Lerp all values for smooth interpolation
 
 VARIABLE NAMING RULES (CRITICAL):
@@ -351,14 +373,14 @@ async function refineCode(currentHTML, issueDescription, apiKey) {
   const refined = await callClaude(apiKey, [
     {
       role: "user",
-      content: `Here is a Three.js scroll-driven webpage I generated. It has issues that need fixing:
+      content: `Here is a Three.js scroll-driven PURE VISUAL FX page (no text overlays, no web design — just visual effects). It has issues that need fixing:
 
 ISSUES: ${issueDescription}
 
 CURRENT CODE:
 ${currentHTML}
 
-Fix the issues while keeping the overall structure. Return the COMPLETE fixed HTML file. No explanations, just the code starting with <!DOCTYPE html>.`
+Fix the issues while keeping the overall structure. This is PURE VISUAL FX — do NOT add any text, headings, or HTML overlays. Return the COMPLETE fixed HTML file. No explanations, just the code starting with <!DOCTYPE html>.`
     }
   ], 20000,
   `You are a Three.js expert fixing code issues. Apply these best practices:\n${THREEJS_SKILLS}`
@@ -371,12 +393,12 @@ Fix the issues while keeping the overall structure. Return the COMPLETE fixed HT
 }
 
 // Combined pipeline
-async function analyzeFramesWithClaude(frames, duration, apiKey, videoWidth, videoHeight, onProgress) {
-  // Stage 1: Video → Spec
-  const spec = await analyzeVideoToSpec(frames, duration, apiKey, videoWidth, videoHeight, onProgress);
+async function analyzeFramesWithClaude(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
+  // Stage 1: Video + Briefing → Spec
+  const spec = await analyzeVideoToSpec(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress);
 
-  // Stage 2: Spec → Code
-  const html = await generateCodeFromSpec(spec, apiKey, onProgress);
+  // Stage 2: Spec + Briefing → Code (pure visual FX)
+  const html = await generateCodeFromSpec(spec, briefing, apiKey, onProgress);
 
   // Stage 3: Auto-fix common code issues
   onProgress && onProgress("Validating and fixing code...");
@@ -627,6 +649,7 @@ export default function VideoTo3DAnimator() {
   const [apiKey, setApiKey] = useState(localStorage.getItem("anthropic_api_key") || "");
   const [showCode, setShowCode] = useState(false);
   const [autoFixes, setAutoFixes] = useState([]);
+  const [briefing, setBriefing] = useState({ business: "", style: "", effects: "" });
 
   const threeContainer = useRef(null);
   const videoPreviewRef = useRef(null);
@@ -680,7 +703,7 @@ export default function VideoTo3DAnimator() {
     }, 500);
 
     try {
-      const result = await analyzeFramesWithClaude(frames, duration, apiKey, videoSize.w, videoSize.h, (msg) => {
+      const result = await analyzeFramesWithClaude(frames, duration, apiKey, videoSize.w, videoSize.h, briefing, (msg) => {
         setError(null);
         // Update progress message - could add a status state for this
       });
@@ -695,9 +718,9 @@ export default function VideoTo3DAnimator() {
     } catch (e) {
       clearInterval(progressTimer);
       setError("Analysis failed: " + e.message);
-      setStage("preview");
+      setStage("briefing");
     }
-  }, [frames, duration, apiKey, videoSize]);
+  }, [frames, duration, apiKey, videoSize, briefing]);
 
   const togglePlay = () => {
     if (animState) { animState.playing = !animState.playing; setIsPlaying(animState.playing); }
@@ -751,6 +774,7 @@ export default function VideoTo3DAnimator() {
     if (animState?.dispose) animState.dispose();
     setStage("upload"); setFile(null); setFrames([]); setCameraData(null);
     setAnimState(null); setError(null); setProgress(0); setShowCode(false);
+    setBriefing({ business: "", style: "", effects: "" });
   };
 
   return (
@@ -769,8 +793,8 @@ export default function VideoTo3DAnimator() {
             fontSize: 16, fontWeight: 700, color: "#000",
           }}>&#9654;</div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 600 }}>Video to 3D Camera Path</div>
-            <div style={{ fontSize: 11, color: theme.textMuted }}>Claude Vision + Three.js + Motion Analysis</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Video to 3D Visual FX</div>
+            <div style={{ fontSize: 11, color: theme.textMuted }}>MP4 → Claude Vision → Three.js Scroll Experience</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -868,15 +892,109 @@ export default function VideoTo3DAnimator() {
                 ))}
               </div>
 
-              <button onClick={startAnalysis} style={{
+              <button onClick={() => { if (!apiKey) { setError("Please enter your Anthropic API key"); return; } setStage("briefing"); }} style={{
                 width: "100%", padding: "14px 24px", borderRadius: 10,
                 background: `linear-gradient(135deg, ${theme.accent}, #ff9933)`,
                 border: "none", color: "#000", fontSize: 15, fontWeight: 700,
                 cursor: "pointer", fontFamily: font,
                 boxShadow: `0 4px 24px ${theme.accentGlow}`,
               }}>
-                Analyze with Claude Vision
+                Continue to Briefing
               </button>
+
+              {error && <div style={{ color: theme.danger, fontSize: 13, marginTop: 12, textAlign: "center" }}>{error}</div>}
+            </div>
+          </div>
+        )}
+
+        {/* BRIEFING — 3 questions to dial in the visual experience */}
+        {stage === "briefing" && (
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
+            <div style={{ width: "100%", maxWidth: 600 }}>
+              <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Dial in your vision</div>
+              <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 24 }}>
+                Tell us what you want. Type <span style={{ color: theme.accent, fontFamily: "monospace" }}>/driveai</span> in any field to load the Drive AI preset.
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                {/* Q1: Business */}
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                    What business is this for? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Include a website URL for color/brand reference</span>
+                  </label>
+                  <input
+                    value={briefing.business}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v.endsWith("/driveai")) {
+                        setBriefing({ ...PRESETS.driveai });
+                        return;
+                      }
+                      setBriefing(b => ({ ...b, business: v }));
+                    }}
+                    placeholder="e.g. Tesla — electric vehicles — https://tesla.com"
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none" }}
+                  />
+                </div>
+
+                {/* Q2: Visual Style */}
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                    What visual style and mood? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Colors, atmosphere, feel</span>
+                  </label>
+                  <input
+                    value={briefing.style}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v.endsWith("/driveai")) {
+                        setBriefing({ ...PRESETS.driveai });
+                        return;
+                      }
+                      setBriefing(b => ({ ...b, style: v }));
+                    }}
+                    placeholder="e.g. Dark cinematic, neon blue + purple, futuristic tech feel"
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none" }}
+                  />
+                </div>
+
+                {/* Q3: Effects */}
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                    What specific effects or transitions? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Particles, shapes, morphing, glow</span>
+                  </label>
+                  <textarea
+                    value={briefing.effects}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v.endsWith("/driveai")) {
+                        setBriefing({ ...PRESETS.driveai });
+                        return;
+                      }
+                      setBriefing(b => ({ ...b, effects: v }));
+                    }}
+                    placeholder="e.g. Particles forming a car shape, then exploding into sparks, morphing into an engine. Heavy bloom/glow. Camera orbits slowly."
+                    rows={3}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical" }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, marginTop: 24 }}>
+                <button onClick={() => setStage("preview")} style={{
+                  padding: "12px 20px", borderRadius: 10, background: "transparent",
+                  border: `1px solid ${theme.border}`, color: theme.textMuted,
+                  fontSize: 14, cursor: "pointer", fontFamily: font,
+                }}>Back</button>
+                <button onClick={startAnalysis} style={{
+                  flex: 1, padding: "14px 24px", borderRadius: 10,
+                  background: `linear-gradient(135deg, ${theme.accent}, #ff9933)`,
+                  border: "none", color: "#000", fontSize: 15, fontWeight: 700,
+                  cursor: "pointer", fontFamily: font,
+                  boxShadow: `0 4px 24px ${theme.accentGlow}`,
+                }}>
+                  Generate Visual FX
+                </button>
+              </div>
 
               {error && <div style={{ color: theme.danger, fontSize: 13, marginTop: 12, textAlign: "center" }}>{error}</div>}
             </div>
