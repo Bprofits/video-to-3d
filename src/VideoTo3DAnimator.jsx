@@ -189,7 +189,7 @@ function calculateFrameStats(imageData) {
 
 async function callClaude(apiKey, messages, maxTokens, system) {
   const body = {
-    model: "claude-sonnet-4-20250514",
+    model: "claude-opus-4-20250514",
     max_tokens: maxTokens,
     messages,
   };
