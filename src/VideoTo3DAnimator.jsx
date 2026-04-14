@@ -331,12 +331,22 @@ REQUIREMENTS:
 6. Camera follows the described movements, tied to scroll position
 7. Use ONLY vanilla Three.js from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
 8. Single HTML file, inline CSS and JS, works on file:// protocol
-9. MAXIMUM visual impact — particle effects, smooth transitions, dynamic lighting, fog, glow
+9. MAXIMUM visual impact — this must look STUNNING:
+   - Use 15000+ particles minimum
+   - Create a CanvasTexture with radial gradient for soft glowing particle sprites (64x64 canvas)
+   - Multiple colored spotlights that orbit the scene
+   - Reflective floor (PlaneGeometry + MeshStandardMaterial metalness:0.95 roughness:0.05)
+   - FogExp2 for depth atmosphere
+   - Smooth easeInOutCubic transitions between shapes
+   - Dynamic light intensity pulsing with Math.sin
+   - Particle system slow rotation (particleSystem.rotation.y = elapsed * 0.05)
+   - Use 800vh scroll spacer for smooth pacing
+10. Each morph transition block should use its OWN block-scoped const t — this is valid JavaScript
 
 HTML STRUCTURE (simple):
 <body style="margin:0;overflow-x:hidden;background:#000">
   <canvas id="bg" style="position:fixed;top:0;left:0;width:100%;height:100%"></canvas>
-  <div style="height:600vh"></div>  <!-- scroll spacer only -->
+  <div style="height:800vh"></div>  <!-- scroll spacer -->
 </body>
 
 SCROLL ANIMATION PATTERNS:
