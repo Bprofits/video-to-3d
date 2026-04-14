@@ -803,7 +803,7 @@ export default function VideoTo3DAnimator() {
           )}
           <a href="https://driveaisales.com" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", opacity: 0.7, transition: "opacity 0.2s" }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7}>
             <span style={{ fontSize: 10, color: theme.textMuted, letterSpacing: "0.05em" }}>Powered by</span>
-            <img src="/driveai-logo.png" alt="Drive AI" style={{ height: 90 }} />
+            <img src="/driveai-logo.png" alt="Drive AI" style={{ height: 120 }} />
           </a>
         </div>
       </div>
