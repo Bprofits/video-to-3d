@@ -331,7 +331,7 @@ VARIABLE NAMING RULES (CRITICAL):
 - If you use 'const i3 = i * 3' in init, use the SAME 'const i3 = i * 3' in animation loops
 
 Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>. No explanations, no markdown. Just the code.`
-  }], 16000,
+  }], 20000,
   // System prompt with skills
   `You are a Three.js expert. You write production-quality WebGL code. You know these best practices:\n${THREEJS_SKILLS}\n${GSAP_SCROLLTRIGGER_SKILLS}`
   );
@@ -360,7 +360,7 @@ ${currentHTML}
 
 Fix the issues while keeping the overall structure. Return the COMPLETE fixed HTML file. No explanations, just the code starting with <!DOCTYPE html>.`
     }
-  ], 16000,
+  ], 20000,
   `You are a Three.js expert fixing code issues. Apply these best practices:\n${THREEJS_SKILLS}`
   );
 
