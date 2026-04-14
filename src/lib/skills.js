@@ -1,6 +1,155 @@
-// Three.js and GSAP skills - loaded from skill files
-// Total: 14662 chars of knowledge
+// Three.js and GSAP scroll-driven animation skills
+// Focused, complete reference for Claude code generation
+// No truncation — every section is self-contained
 
-export const THREEJS_SKILLS = `\n## Animation\n---\nname: threejs-animation\ndescription: Three.js animation - keyframe animation, skeletal animation, morph targets, animation mixing. Use when animating objects, playing GLTF animations, creating procedural motion, or blending animations.\n---\n\n# Three.js Animation\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\n\n// Simple procedural animation\nconst clock = new THREE.Clock();\n\nfunction animate() {\n  const delta = clock.getDelta();\n  const elapsed = clock.getElapsedTime();\n\n  mesh.rotation.y += delta;\n  mesh.position.y = Math.sin(elapsed) * 0.5;\n\n  requestAnimationFrame(animate);\n  renderer.render(scene, camera);\n}\nanimate();\n'''\n\n## Animation System Overview\n\nThree.js animation system has three main components:\n\n1. **AnimationClip** - Container for keyframe data\n2. **AnimationMixer** - Plays animations on a root object\n3. **AnimationAction** - Controls playback of a clip\n\n## AnimationClip\n\nStores keyframe animation data.\n\n'''javascript\n// Create animation clip\nconst times = [0, 1, 2]; // Keyframe times (seconds)\nconst values = [0, 1, 0]; // Values at each keyframe\n\nconst track = new THREE.NumberKeyframeTrack(\n  ".position[y]", // Property path\n  times,\n  values,\n);\n\n\n\n## Fundamentals\n---\nname: threejs-fundamentals\ndescription: Three.js scene setup, cameras, renderer, Object3D hierarchy, coordinate systems. Use when setting up 3D scenes, creating cameras, configuring renderers, managing object hierarchies, or working with transforms.\n---\n\n# Three.js Fundamentals\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\n\n// Create scene, camera, renderer\nconst scene = new THREE.Scene();\nconst camera = new THREE.PerspectiveCamera(\n  75,\n  window.innerWidth / window.innerHeight,\n  0.1,\n  1000,\n);\nconst renderer = new THREE.WebGLRenderer({ antialias: true });\n\nrenderer.setSize(window.innerWidth, window.innerHeight);\nrenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));\ndocument.body.appendChild(renderer.domElement);\n\n// Add a mesh\nconst geometry = new THREE.BoxGeometry(1, 1, 1);\nconst material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });\nconst cube = new THREE.Mesh(geometry, material);\nscene.add(cube);\n\n// Add light\nscene.add(new THREE.AmbientLight(0xffffff, 0.5));\nconst dirLight = new THREE.DirectionalLight(0xffffff, 1);\ndirLight.position.set(5, 5, 5);\nscene.add(dirLight);\n\ncamera.position.z = 5;\n\n// Animation loop\nfunction animate() {\n  requ\n\n## Geometry\n---\nname: threejs-geometry\ndescription: Three.js geometry creation - built-in shapes, BufferGeometry, custom geometry, instancing. Use when creating 3D shapes, working with vertices, building custom meshes, or optimizing with instanced rendering.\n---\n\n# Three.js Geometry\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\n\n// Built-in geometry\nconst box = new THREE.BoxGeometry(1, 1, 1);\nconst sphere = new THREE.SphereGeometry(0.5, 32, 32);\nconst plane = new THREE.PlaneGeometry(10, 10);\n\n// Create mesh\nconst material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });\nconst mesh = new THREE.Mesh(box, material);\nscene.add(mesh);\n'''\n\n## Built-in Geometries\n\n### Basic Shapes\n\n'''javascript\n// Box - width, height, depth, widthSegments, heightSegments, depthSegments\nnew THREE.BoxGeometry(1, 1, 1, 1, 1, 1);\n\n// Sphere - radius, widthSegments, heightSegments, phiStart, phiLength, thetaStart, thetaLength\nnew THREE.SphereGeometry(1, 32, 32);\nnew THREE.SphereGeometry(1, 32, 32, 0, Math.PI * 2, 0, Math.PI); // Full sphere\nnew THREE.SphereGeometry(1, 32, 32, 0, Math.PI); // Hemisphere\n\n// Plane - width, height, widthSegments, heightSegments\nnew THREE.PlaneGeometry(10, 10, 1, 1);\n\n\n## Interaction\n---\nname: threejs-interaction\ndescription: Three.js interaction - raycasting, controls, mouse/touch input, object selection. Use when handling user input, implementing click detection, adding camera controls, or creating interactive 3D experiences.\n---\n\n# Three.js Interaction\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\nimport { OrbitControls } from "three/addons/controls/OrbitControls.js";\n\n// Camera controls\nconst controls = new OrbitControls(camera, renderer.domElement);\ncontrols.enableDamping = true;\n\n// Raycasting for click detection\nconst raycaster = new THREE.Raycaster();\nconst mouse = new THREE.Vector2();\n\nfunction onClick(event) {\n  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;\n  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;\n\n  raycaster.setFromCamera(mouse, camera);\n  const intersects = raycaster.intersectObjects(scene.children);\n\n  if (intersects.length > 0) {\n    console.log("Clicked:", intersects[0].object);\n  }\n}\n\nwindow.addEventListener("click", onClick);\n'''\n\n## Raycaster\n\n### Basic Raycasting\n\n'''javascript\nconst raycaster = new THREE.Raycaster();\n\n// From camera (mouse picking)\nraycaster.setFromCamera(mousePosition, camera);\n\n\n\n## Lighting\n---\nname: threejs-lighting\ndescription: Three.js lighting - light types, shadows, environment lighting. Use when adding lights, configuring shadows, setting up IBL, or optimizing lighting performance.\n---\n\n# Three.js Lighting\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\n\n// Basic lighting setup\nconst ambientLight = new THREE.AmbientLight(0xffffff, 0.5);\nscene.add(ambientLight);\n\nconst directionalLight = new THREE.DirectionalLight(0xffffff, 1);\ndirectionalLight.position.set(5, 5, 5);\nscene.add(directionalLight);\n'''\n\n## Light Types Overview\n\n| Light            | Description            | Shadow Support | Cost     |\n| ---------------- | ---------------------- | -------------- | -------- |\n| AmbientLight     | Uniform everywhere     | No             | Very Low |\n| HemisphereLight  | Sky/ground gradient    | No             | Very Low |\n| DirectionalLight | Parallel rays (sun)    | Yes            | Low      |\n| PointLight       | Omnidirectional (bulb) | Yes            | Medium   |\n| SpotLight        | Cone-shaped            | Yes            | Medium   |\n| RectAreaLight    | Area light (window)    | No\\*           | High     |\n\n\\*RectAreaLight shadows require custom sol\n\n## Loaders\n---\nname: threejs-loaders\ndescription: Three.js asset loading - GLTF, textures, images, models, async patterns. Use when loading 3D models, textures, HDR environments, or managing loading progress.\n---\n\n# Three.js Loaders\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\nimport { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";\n\n// Load GLTF model\nconst loader = new GLTFLoader();\nloader.load("model.glb", (gltf) => {\n  scene.add(gltf.scene);\n});\n\n// Load texture\nconst textureLoader = new THREE.TextureLoader();\nconst texture = textureLoader.load("texture.jpg");\n'''\n\n## LoadingManager\n\nCoordinate multiple loaders and track progress.\n\n'''javascript\nconst manager = new THREE.LoadingManager();\n\n// Callbacks\nmanager.onStart = (url, loaded, total) => {\n  console.log('Started loading: \${url}');\n};\n\nmanager.onLoad = () => {\n  console.log("All assets loaded!");\n  startGame();\n};\n\nmanager.onProgress = (url, loaded, total) => {\n  const progress = (loaded / total) * 100;\n  console.log('Loading: \${progress.toFixed(1)}%');\n  updateProgressBar(progress);\n};\n\nmanager.onError = (url) => {\n  console.error('Error loading: \${url}');\n};\n\n// Use manager with loaders\nconst textureLoader\n\n## Materials\n---\nname: threejs-materials\ndescription: Three.js materials - PBR, basic, phong, shader materials, material properties. Use when styling meshes, working with textures, creating custom shaders, or optimizing material performance.\n---\n\n# Three.js Materials\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\n\n// PBR material (recommended for realistic rendering)\nconst material = new THREE.MeshStandardMaterial({\n  color: 0x00ff00,\n  roughness: 0.5,\n  metalness: 0.5,\n});\n\nconst mesh = new THREE.Mesh(geometry, material);\n'''\n\n## Material Types Overview\n\n| Material             | Use Case                              | Lighting           |\n| -------------------- | ------------------------------------- | ------------------ |\n| MeshBasicMaterial    | Unlit, flat colors, wireframes        | No                 |\n| MeshLambertMaterial  | Matte surfaces, performance           | Yes (diffuse only) |\n| MeshPhongMaterial    | Shiny surfaces, specular highlights   | Yes                |\n| MeshStandardMaterial | PBR, realistic materials              | Yes (PBR)          |\n| MeshPhysicalMaterial | Advanced PBR, clearcoat, transmission | Yes (PBR+)         |\n| MeshToonMaterial     | Cel-shad\n\n## Postprocessing\n---\nname: threejs-postprocessing\ndescription: Three.js post-processing - EffectComposer, bloom, DOF, screen effects. Use when adding visual effects, color grading, blur, glow, or creating custom screen-space shaders.\n---\n\n# Three.js Post-Processing\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\nimport { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";\nimport { RenderPass } from "three/addons/postprocessing/RenderPass.js";\nimport { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";\n\n// Setup composer\nconst composer = new EffectComposer(renderer);\n\n// Render scene\nconst renderPass = new RenderPass(scene, camera);\ncomposer.addPass(renderPass);\n\n// Add bloom\nconst bloomPass = new UnrealBloomPass(\n  new THREE.Vector2(window.innerWidth, window.innerHeight),\n  1.5, // strength\n  0.4, // radius\n  0.85, // threshold\n);\ncomposer.addPass(bloomPass);\n\n// Animation loop - use composer instead of renderer\nfunction animate() {\n  requestAnimationFrame(animate);\n  composer.render(); // NOT renderer.render()\n}\n'''\n\n## EffectComposer Setup\n\n'''javascript\nimport { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";\nimport {\n\n## Shaders\n---\nname: threejs-shaders\ndescription: Three.js shaders - GLSL, ShaderMaterial, uniforms, custom effects. Use when creating custom visual effects, modifying vertices, writing fragment shaders, or extending built-in materials.\n---\n\n# Three.js Shaders\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\n\nconst material = new THREE.ShaderMaterial({\n  uniforms: {\n    time: { value: 0 },\n    color: { value: new THREE.Color(0xff0000) },\n  },\n  vertexShader: '\n    void main() {\n      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n    }\n  ',\n  fragmentShader: '\n    uniform vec3 color;\n\n    void main() {\n      gl_FragColor = vec4(color, 1.0);\n    }\n  ',\n});\n\n// Update in animation loop\nmaterial.uniforms.time.value = clock.getElapsedTime();\n'''\n\n## ShaderMaterial vs RawShaderMaterial\n\n### ShaderMaterial\n\nThree.js provides built-in uniforms and attributes.\n\n'''javascript\nconst material = new THREE.ShaderMaterial({\n  vertexShader: '\n    // Built-in uniforms available:\n    // uniform mat4 modelMatrix;\n    // uniform mat4 modelViewMatrix;\n    // uniform mat4 projectionMatrix;\n    // uniform mat4 viewMatrix;\n    // uniform mat3 normalMatrix;\n    // uniform vec3 \n\n## Textures\n---\nname: threejs-textures\ndescription: Three.js textures - texture types, UV mapping, environment maps, texture settings. Use when working with images, UV coordinates, cubemaps, HDR environments, or texture optimization.\n---\n\n# Three.js Textures\n\n## Quick Start\n\n'''javascript\nimport * as THREE from "three";\n\n// Load texture\nconst loader = new THREE.TextureLoader();\nconst texture = loader.load("texture.jpg");\n\n// Apply to material\nconst material = new THREE.MeshStandardMaterial({\n  map: texture,\n});\n'''\n\n## Texture Loading\n\n### Basic Loading\n\n'''javascript\nconst loader = new THREE.TextureLoader();\n\n// Async with callbacks\nloader.load(\n  "texture.jpg",\n  (texture) => console.log("Loaded"),\n  (progress) => console.log("Progress"),\n  (error) => console.error("Error"),\n);\n\n// Synchronous style (loads async internally)\nconst texture = loader.load("texture.jpg");\nmaterial.map = texture;\n'''\n\n### Promise Wrapper\n\n'''javascript\nfunction loadTexture(url) {\n  return new Promise((resolve, reject) => {\n    new THREE.TextureLoader().load(url, resolve, undefined, reject);\n  });\n}\n\n// Usage\nconst [colorMap, normalMap, roughnessMap] = await Promise.all([\n  loadTexture("color.jpg"),\n  loadTexture("\n`;
+export const THREEJS_SKILLS = `
+## Scene Setup
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setClearColor(0x000000, 1);
+document.getElementById('canvas-container').appendChild(renderer.domElement);
 
-export const GSAP_SCROLLTRIGGER_SKILLS = `---\nname: gsap-scrolltrigger\ndescription: Official GSAP skill for ScrollTrigger — scroll-linked animations, pinning, scrub, triggers. Use when building or recommending scroll-based animation, parallax, pinned sections, or when the user asks about ScrollTrigger, scroll animations, or pinning. Recommend GSAP for scroll-driven animation when no library is specified.\nlicense: MIT\n---\n\n# GSAP ScrollTrigger\n\n## When to Use This Skill\n\nApply when implementing scroll-driven animations: triggering tweens/timelines on scroll, pinning elements, scrubbing animation to scroll position, or when the user mentions ScrollTrigger, scroll animations, or pinning. When the user asks for scroll-based animation or parallax without specifying a library, recommend GSAP and use ScrollTrigger.\n\n**Related skills:** For tweens and timelines use **gsap-core** and **gsap-timeline**; for React cleanup use **gsap-react**; for ScrollSmoother or scroll-to use **gsap-plugins**.\n\n## Registering the Plugin\n\nScrollTrigger is a plugin. After loading the script, register it once:\n\n'''javascript\ngsap.registerPlugin(ScrollTrigger);\n'''\n\n## Basic Trigger\n\nTie a tween or timeline to scroll position:\n\n'''javascript\ngsap.to(".box", {\n  x: 500,\n  duration: 1,\n  scrollTrigger: {\n    trigger: ".box",\n    start: "top center",   // when top of trigger hits center of viewport\n    end: "bottom center",  // when the bottom of the trigger hits the center of the viewport\n    toggleActions: "play reverse play reverse" // onEnter play, onLeave reverse, onEnterBack play, onLeaveBack reverse\n  }\n});\n'''\n\n**start** / **end**: viewport position vs. trigger position. Format '"triggerPosition viewportPosition"'. Examples: '"top top"', '"center center"', '"bottom 80%"', or numeric pixel value like '500' means when the scroller (viewport by default) scrolls a total of 500px from the top (0). Use relative values: '"+=300"' (300px past start), '"+=100%"' (scroller height past start), or '"max"' for maximum scroll. Wrap in **clamp()**`;
+## Particle Systems (BufferGeometry)
+Use Float32Array for positions, colors. PointsMaterial for rendering.
+CRITICAL: declare position/color arrays with UNIQUE names — never reuse 'colors' for both a palette object and a Float32Array.
+
+const particleCount = 10000;
+const geometry = new THREE.BufferGeometry();
+const positions = new Float32Array(particleCount * 3);
+const particleColors = new Float32Array(particleCount * 3);
+for (let i = 0; i < particleCount; i++) {
+  const i3 = i * 3;
+  positions[i3] = (Math.random() - 0.5) * 10;
+  positions[i3+1] = (Math.random() - 0.5) * 10;
+  positions[i3+2] = (Math.random() - 0.5) * 10;
+  const c = new THREE.Color().setHSL(Math.random(), 0.8, 0.6);
+  particleColors[i3] = c.r;
+  particleColors[i3+1] = c.g;
+  particleColors[i3+2] = c.b;
+}
+geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+geometry.setAttribute('color', new THREE.BufferAttribute(particleColors, 3));
+const material = new THREE.PointsMaterial({
+  size: 0.08, sizeAttenuation: true, vertexColors: true,
+  transparent: true, opacity: 1,
+  blending: THREE.AdditiveBlending, depthWrite: false
+});
+const points = new THREE.Points(geometry, material);
+scene.add(points);
+
+## Particle Shape Morphing
+Store target positions in separate Float32Arrays. Lerp between them based on scroll progress.
+CRITICAL: use the SAME loop variable name consistently. If you declare 'const i3 = i * 3' in your init loop,
+use EXACTLY 'const i3 = i * 3' in your animation loop too — never rename to i3_p1 or similar.
+
+const shapeA = new Float32Array(particleCount * 3);
+const shapeB = new Float32Array(particleCount * 3);
+function updateParticles(progress) {
+  const pos = geometry.attributes.position.array;
+  for (let i = 0; i < particleCount; i++) {
+    const i3 = i * 3;
+    pos[i3] = shapeA[i3] + (shapeB[i3] - shapeA[i3]) * progress;
+    pos[i3+1] = shapeA[i3+1] + (shapeB[i3+1] - shapeA[i3+1]) * progress;
+    pos[i3+2] = shapeA[i3+2] + (shapeB[i3+2] - shapeA[i3+2]) * progress;
+  }
+  geometry.attributes.position.needsUpdate = true;
+}
+
+## Variable Naming Rules (CRITICAL — READ CAREFULLY)
+1. NEVER declare two variables with the same name in the same script, even in different blocks.
+   BAD:  const colors = { primary: 0xff0000 }; ... const colors = new Float32Array(...);
+   GOOD: const palette = { primary: 0xff0000 }; ... const particleColors = new Float32Array(...);
+2. If you declare a loop variable, use the SAME name when referencing it everywhere.
+   BAD:  declare 'const idx = i * 3' then reference 'positions[i3]'
+   GOOD: declare 'const i3 = i * 3' then reference 'positions[i3]'
+3. Every variable referenced in updateScene/animate MUST be declared in an accessible scope.
+   If you reference 'car' in updateScene(), you MUST have 'const car = ...' in the setup code.
+4. NEVER allocate new THREE.Vector3/Color/Matrix inside a per-frame animation loop.
+   Pre-allocate outside and reuse: const tempVec = new THREE.Vector3();
+   Inside loop: tempVec.set(x, y, z).normalize();
+
+## Scroll-Driven Animation Pattern
+let scrollProgress = 0;
+window.addEventListener('scroll', function() {
+  var scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+  var scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
+  scrollProgress = scrollHeight > 0 ? Math.max(0, Math.min(1, scrollTop / scrollHeight)) : 0;
+}, { passive: true });
+
+## Camera Movement
+Define camera keyframes as arrays. Lerp position and lookAt based on scroll progress.
+function lerp(a, b, t) { return a + (b - a) * t; }
+const cameraKeyframes = [
+  { scroll: 0.0, pos: [0,0,8], lookAt: [0,0,0] },
+  { scroll: 0.5, pos: [5,2,6], lookAt: [0,0,0] },
+  { scroll: 1.0, pos: [0,5,10], lookAt: [0,0,0] },
+];
+
+## Lighting
+const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambient);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+dirLight.position.set(5, 5, 5);
+scene.add(dirLight);
+
+## Materials
+MeshStandardMaterial for PBR (has emissiveIntensity property).
+MeshPhongMaterial for simpler shading (does NOT have emissiveIntensity).
+MeshBasicMaterial for unlit/wireframe overlays.
+PointsMaterial 'size' is a material uniform, NOT per-vertex. For per-vertex sizes use ShaderMaterial.
+
+## Animation Loop
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const elapsed = clock.getElapsedTime();
+  renderer.render(scene, camera);
+}
+animate();
+
+## Resize Handler
+window.addEventListener('resize', function() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+
+## Text Overlays with Scroll Reveal
+Use CSS sections with opacity/transform transitions.
+Toggle .visible class based on scroll progress thresholds.
+Position: fixed canvas behind, relative content on top with z-index.
+`;
+
+export const GSAP_SCROLLTRIGGER_SKILLS = `
+## GSAP ScrollTrigger
+gsap.registerPlugin(ScrollTrigger);
+gsap.to('.box', {
+  x: 500, duration: 1,
+  scrollTrigger: {
+    trigger: '.box',
+    start: 'top center',
+    end: 'bottom center',
+    toggleActions: 'play reverse play reverse',
+    scrub: true
+  }
+});
+
+## Pinning
+ScrollTrigger.create({
+  trigger: '.panel',
+  start: 'top top',
+  end: '+=500',
+  pin: true
+});
+
+## Timeline with ScrollTrigger
+const tl = gsap.timeline({
+  scrollTrigger: { trigger: '.container', start: 'top top', end: '+=3000', scrub: 1, pin: true }
+});
+tl.to('.step1', { opacity: 1, y: 0 })
+  .to('.step2', { opacity: 1, y: 0 })
+  .to('.step3', { opacity: 1, y: 0 });
+`;

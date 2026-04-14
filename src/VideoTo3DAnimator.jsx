@@ -1,9 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import * as THREE from "three";
-import { setupPostProcessing } from "./lib/postProcessing";
 import { parseColmapImages, parseColmapCameras, colmapToAnimationData } from "./lib/colmapParser";
-import { buildAnimationClip, exportAnimationClipJSON, generateStandaloneHTML } from "./lib/animationExport";
-import { estimateCameraMotion, extractFeaturePoints, buildTrajectoryFromMotion } from "./lib/cameraPoseRecovery";
 import { loadSplatFile } from "./lib/splatViewer";
 import { THREEJS_SKILLS, GSAP_SCROLLTRIGGER_SKILLS } from "./lib/skills";
 import { validateAndFixCode } from "./lib/codeValidator";
@@ -281,7 +278,7 @@ Be extremely detailed about the visual elements. Describe exactly what shapes, c
 Respond with ONLY valid JSON. No markdown fences.`
       }
     ]
-  }], 4000);
+  }], 8000);
 
   let spec;
   try {
@@ -319,15 +316,19 @@ REQUIREMENTS:
 8. Single HTML file, inline CSS and JS, works on file:// protocol
 9. Premium quality - smooth animations, proper easing, professional typography
 
-CRITICAL Three.js PATTERNS TO USE:
-${THREEJS_SKILLS}
-
 SCROLL ANIMATION PATTERNS:
 - Use window scroll event listener with passive:true
 - Map scrollTop / (scrollHeight - innerHeight) to 0-1 progress
 - Use scroll progress to drive camera position, particle morphing, text reveals
 - For section-based content: calculate which section is active from progress
 - Lerp all values for smooth interpolation
+
+VARIABLE NAMING RULES (CRITICAL):
+- NEVER declare two variables with the same name (e.g. 'colors' for palette AND 'colors' for Float32Array)
+- Use UNIQUE descriptive names: 'palette', 'particleColors', 'vertexPositions'
+- Every variable referenced in updateScene/animate MUST be declared in setup code
+- NEVER allocate new THREE.Vector3/Color inside animation loops — pre-allocate and reuse with .set()
+- If you use 'const i3 = i * 3' in init, use the SAME 'const i3 = i * 3' in animation loops
 
 Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>. No explanations, no markdown. Just the code.`
   }], 16000,
@@ -608,48 +609,6 @@ camera.lookAt(lookAtCurve.getPoint(0));
 }
 
 // -----------------------------------------------
-// VIDEO RECORDER (WebGL to MP4)
-// -----------------------------------------------
-function recordAnimation(renderer, scene, camera, positionCurve, lookAtCurve, totalDuration, fps = 30) {
-  return new Promise((resolve) => {
-    const canvas = renderer.domElement;
-    const stream = canvas.captureStream(fps);
-    const recorder = new MediaRecorder(stream, {
-      mimeType: "video/webm;codecs=vp9",
-      videoBitsPerSecond: 5000000,
-    });
-    const chunks = [];
-
-    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: "video/webm" });
-      resolve(blob);
-    };
-
-    recorder.start();
-
-    const totalFrames = Math.ceil(totalDuration * fps);
-    let frame = 0;
-
-    function renderFrame() {
-      if (frame >= totalFrames) {
-        recorder.stop();
-        return;
-      }
-
-      const t = frame / totalFrames;
-      camera.position.copy(positionCurve.getPoint(t));
-      camera.lookAt(lookAtCurve.getPoint(t));
-      renderer.render(scene, camera);
-      frame++;
-      requestAnimationFrame(renderFrame);
-    }
-
-    renderFrame();
-  });
-}
-
-// -----------------------------------------------
 // MAIN COMPONENT
 // -----------------------------------------------
 export default function VideoTo3DAnimator() {
@@ -666,7 +625,6 @@ export default function VideoTo3DAnimator() {
   const [speed, setSpeed] = useState(1);
   const [scrub, setScrub] = useState(0);
   const [apiKey, setApiKey] = useState(localStorage.getItem("anthropic_api_key") || "");
-  const [recording, setRecording] = useState(false);
   const [showCode, setShowCode] = useState(false);
   const [autoFixes, setAutoFixes] = useState([]);
 
@@ -752,44 +710,6 @@ export default function VideoTo3DAnimator() {
   };
 
   const handleSpeed = (v) => { setSpeed(v); if (animState) animState.speed = v; };
-
-  const exportJSON = () => {
-    if (!animState) return;
-    const blob = new Blob([animState.exportJSON()], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "camera-path.json"; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportCode = () => {
-    if (!animState) return;
-    const code = animState.exportThreeJSCode();
-    const blob = new Blob([code], { type: "text/javascript" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "camera-animation.js"; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportHTML = () => {
-    if (!cameraData) return;
-    const html = generateStandaloneHTML(cameraData);
-    const blob = new Blob([html], { type: "text/html" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "camera-animation.html"; a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const exportAnimClip = () => {
-    if (!cameraData) return;
-    const clip = buildAnimationClip(cameraData);
-    if (clip) {
-      const json = exportAnimationClipJSON(clip);
-      const blob = new Blob([json], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href = url; a.download = "animation-clip.json"; a.click();
-      URL.revokeObjectURL(url);
-    }
-  };
 
   const handleColmapImport = useCallback(async (files) => {
     try {

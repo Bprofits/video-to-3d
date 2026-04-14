@@ -19,7 +19,7 @@ export async function onRequestPost(context) {
     headers: {
       "Content-Type": "application/json",
       "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      "anthropic-version": "2024-10-22",
     },
     body: body,
   });

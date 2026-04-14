@@ -17,7 +17,7 @@ export default defineConfig({
             if (apiKey) {
               proxyReq.setHeader('x-api-key', apiKey);
             }
-            proxyReq.setHeader('anthropic-version', '2023-06-01');
+            proxyReq.setHeader('anthropic-version', '2024-10-22');
             // Remove headers that Anthropic doesn't want
             proxyReq.removeHeader('origin');
             proxyReq.removeHeader('referer');
