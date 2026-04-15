@@ -183,10 +183,23 @@ function calculateFrameStats(imageData) {
 // -----------------------------------------------
 const PRESETS = {
   driveai: {
-    business: "Drive AI Sales Inc. — AI-powered automation for car dealerships. Website: https://driveaisales.com",
-    style: "Dark cinematic with orange (#E87A00) and black (#070707) brand colors, cream (#F4DEC9) accents. Premium automotive tech feel — holographic, futuristic, high-end.",
-    effects: "Particle morphing between shapes (DNA helix, engine, drivetrain, neural network). Scatter transitions, additive blending glow, reflective floor, fog. Camera orbits and dollies. Intense visual journey.",
-    creative: "Make it feel like a premium luxury tech experience. The kind of visual that makes someone stop scrolling and say 'holy shit'. Dramatic camera sweeps, particles that feel alive, pulsing energy.",
+    business: "Drive AI Sales Inc. — AI-powered lead response automation for car dealerships. Responds to every lead in under 60 seconds via text, email, and voice. 24/7. Website: https://driveaisales.com",
+    style: "Dark cinematic black (#000000) background. Primary orange (#E87A00) for energy and CTA elements. Cream (#F4DEC9) accents. Fonts: Bebas Neue for headlines, Barlow for body. Premium automotive tech feel — holographic, futuristic, high-end. Think luxury car commercial meets Silicon Valley tech demo.",
+    effects: `The visual journey tells the story of a CRM system as a CAR — each part of the car maps to CRM architecture:
+
+SCENE FLOW (particle morph sequence):
+1. DNA DOUBLE HELIX — represents the foundational data/code, the blueprint of the system
+2. ENGINE (V8 style) — workflow automation & AI processing, the power that drives everything
+3. DRIVETRAIN / TRANSMISSION — integrations & APIs routing data between systems
+4. FULL CAR SILHOUETTE — the complete CRM system assembled, wheels = customer touchpoints
+5. NEURAL NETWORK — connected intelligence, the AI brain orchestrating it all
+
+Each shape should be built from 15000+ glowing orange particles with soft sprite textures.
+Scatter/explode transitions between shapes. Reflective dark floor. FogExp2 atmosphere.
+Orbiting orange and blue spotlights. Camera orbits and dollies dramatically between scenes.
+The car's wheels should be recognizable circles. The engine should have visible cylinder shapes.
+The neural network should have interconnected node clusters with visible connection lines.`,
+    creative: "This visual IS the brand. It should feel like watching a Lamborghini commercial directed by Ridley Scott but for AI software. The CRM-as-car metaphor must come alive — the viewer should FEEL each component: the raw power of the engine (automation), the precision of the transmission (data routing), the beauty of the assembled car (the complete platform). Orange particles against pure black. Pulsing energy. Dramatic reveals. Make people stop scrolling and say 'holy shit, I need this.'",
   },
 };
 
@@ -611,6 +624,7 @@ export default function VideoTo3DAnimator() {
   const [showCode, setShowCode] = useState(false);
   const [autoFixes, setAutoFixes] = useState([]);
   const [briefing, setBriefing] = useState({ business: "", style: "", effects: "", creative: "" });
+  const [presetActive, setPresetActive] = useState(null);
 
   const threeContainer = useRef(null);
   const videoPreviewRef = useRef(null);
@@ -736,6 +750,7 @@ export default function VideoTo3DAnimator() {
     setStage("upload"); setFile(null); setFrames([]); setCameraData(null);
     setAnimState(null); setError(null); setProgress(0); setShowCode(false);
     setBriefing({ business: "", style: "", effects: "", creative: "" });
+    setPresetActive(null);
   };
 
   return (
@@ -873,7 +888,17 @@ export default function VideoTo3DAnimator() {
         {stage === "briefing" && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
             <div style={{ width: "100%", maxWidth: 600 }}>
-              <div style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>Dial in your vision</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                <div style={{ fontSize: 20, fontWeight: 600 }}>Dial in your vision</div>
+                {presetActive && (
+                  <div style={{
+                    padding: "4px 12px", borderRadius: 20, fontSize: 11, fontWeight: 700,
+                    background: `linear-gradient(135deg, ${theme.accent}, #ff9933)`,
+                    color: "#000", letterSpacing: "0.05em", animation: "fadeIn 0.3s ease",
+                  }}>{presetActive.toUpperCase()} LOADED</div>
+                )}
+              </div>
+              <style>{`@keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }`}</style>
               <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 24 }}>
                 Tell us what you want. Type <span style={{ color: theme.accent, fontFamily: "monospace" }}>/driveai</span> in any field to load the Drive AI preset.
               </div>
@@ -888,14 +913,17 @@ export default function VideoTo3DAnimator() {
                     value={briefing.business}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (v.endsWith("/driveai")) {
-                        setBriefing({ ...PRESETS.driveai });
+                      const cmd = v.match(/\/(\w+)$/);
+                      if (cmd && PRESETS[cmd[1]]) {
+                        setBriefing({ ...PRESETS[cmd[1]] });
+                        setPresetActive(cmd[1]);
                         return;
                       }
+                      setPresetActive(null);
                       setBriefing(b => ({ ...b, business: v }));
                     }}
                     placeholder="e.g. Tesla — electric vehicles — https://tesla.com"
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none" }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", transition: "all 0.3s" }}
                   />
                 </div>
 
@@ -908,14 +936,17 @@ export default function VideoTo3DAnimator() {
                     value={briefing.style}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (v.endsWith("/driveai")) {
-                        setBriefing({ ...PRESETS.driveai });
+                      const cmd = v.match(/\/(\w+)$/);
+                      if (cmd && PRESETS[cmd[1]]) {
+                        setBriefing({ ...PRESETS[cmd[1]] });
+                        setPresetActive(cmd[1]);
                         return;
                       }
+                      setPresetActive(null);
                       setBriefing(b => ({ ...b, style: v }));
                     }}
                     placeholder="e.g. Dark cinematic, neon blue + purple, futuristic tech feel"
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none" }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", transition: "all 0.3s" }}
                   />
                 </div>
 
@@ -928,15 +959,18 @@ export default function VideoTo3DAnimator() {
                     value={briefing.effects}
                     onChange={(e) => {
                       const v = e.target.value;
-                      if (v.endsWith("/driveai")) {
-                        setBriefing({ ...PRESETS.driveai });
+                      const cmd = v.match(/\/(\w+)$/);
+                      if (cmd && PRESETS[cmd[1]]) {
+                        setBriefing({ ...PRESETS[cmd[1]] });
+                        setPresetActive(cmd[1]);
                         return;
                       }
+                      setPresetActive(null);
                       setBriefing(b => ({ ...b, effects: v }));
                     }}
                     placeholder="e.g. Particles forming a car shape, then exploding into sparks, morphing into an engine. Heavy bloom/glow. Camera orbits slowly."
                     rows={3}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical" }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical", transition: "all 0.3s" }}
                   />
                 </div>
 
@@ -950,7 +984,7 @@ export default function VideoTo3DAnimator() {
                     onChange={(e) => setBriefing(b => ({ ...b, creative: e.target.value }))}
                     placeholder="e.g. Make it absolutely insane. I want people to feel like they're flying through space. Heavy glow, dramatic camera sweeps, particles should feel alive."
                     rows={3}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical" }}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical", transition: "all 0.3s" }}
                   />
                 </div>
               </div>
