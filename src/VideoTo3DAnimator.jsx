@@ -239,7 +239,7 @@ async function generateFromVideo(frames, duration, apiKey, videoWidth, videoHeig
       ...imageBlocks,
       {
         type: "text",
-        text: `You are a world-class Three.js visual effects developer. Study the ${frames.length} frames above from a ${duration.toFixed(1)}s video (${videoWidth}x${videoHeight}).
+        text: `You are a world-class Three.js creative developer. Study the ${frames.length} frames above from a ${duration.toFixed(1)}s video (${videoWidth}x${videoHeight}).
 
 MOTION ANALYSIS:
 ${motionSummary}
@@ -247,61 +247,72 @@ ${motionSummary}
 USER BRIEFING:
 - Business/Context: ${briefing.business || "Not specified — use your best judgment from the video"}
 - Visual Style: ${briefing.style || "Match the video's aesthetic — study the colors, mood, lighting"}
-- Desired Effects: ${briefing.effects || "Recreate the visual experience from the video with premium Three.js effects"}
+- Desired Effects: ${briefing.effects || "Recreate the visual experience from the video using the best Three.js techniques"}
 ${briefing.creative ? `- Creative Direction: ${briefing.creative}` : ""}
 
-YOUR TASK: Generate a COMPLETE, production-quality, single-file HTML page that recreates the visual experience from this video as a scroll-driven Three.js visual FX masterpiece.
+YOUR TASK: Generate a COMPLETE, production-quality, single-file HTML page that recreates the visual experience from this video as a scroll-driven Three.js masterpiece.
+
+Study the video frames carefully and determine:
+1. The color palette (extract exact hex colors from the dominant tones)
+2. What's actually in the video — objects, scenes, environments, effects
+3. The mood and atmosphere (dark, bright, neon, cinematic, natural, abstract)
+4. Camera movements (orbits, dollies, crane shots, tracking)
+5. Transitions between scenes (morphs, fades, cuts, dissolves)
+
+THEN choose the RIGHT Three.js techniques to recreate it. DO NOT default to particles.
+- If the video shows a landscape → build terrain geometry with noise displacement
+- If it shows snowfall → use falling particle system with drift and reset
+- If it shows a car → build it from grouped geometry (boxes, cylinders), not random particles
+- If it shows abstract art → use shader materials, noise displacement, organic shapes
+- If it shows architecture → use instanced meshes, clean geometry, shadows
+- If it shows space → use star field particles, planet spheres, nebula fog
+- If it shows nature → use terrain, trees (cones+cylinders), water plane with animated vertices
+- If it shows data/tech → use grid patterns, circuit lines, glowing wireframes, data streams
+- If it shows particles → THEN use particles, with soft sprite textures and additive blending
+MIX techniques freely. A scene can have terrain + particles + geometry + fog all at once.
 
 THIS IS A PURE VISUAL FX PAGE — NO TEXT, NO HEADINGS, NO PARAGRAPHS, NO WEB DESIGN.
 The ENTIRE page is just the Three.js canvas filling the screen with scroll-driven visual effects.
-Think of it as a visual journey — particles morphing, shapes forming, cameras sweeping, colors shifting, lights dancing.
-
-Study the video frames carefully. Extract:
-- The color palette (exact hex colors from the dominant tones)
-- The shapes and objects visible (recreate as particle formations)
-- The camera movements (orbits, dollies, crane shots)
-- The transitions between scenes (morphs, scatters, fades)
-- The mood and atmosphere (dark, bright, neon, cinematic)
+Think of it as a visual journey that takes someone on a trip.
 
 REQUIREMENTS:
 1. Scroll-driven — scrolling progresses through the visual experience (800vh scroll spacer)
-2. FULLSCREEN Three.js canvas — NO HTML text, NO sections, NO typography whatsoever
+2. FULLSCREEN Three.js canvas — NO HTML text whatsoever
 3. Use ONLY vanilla Three.js from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
 4. Single HTML file, inline CSS and JS, works on file:// protocol
 
-PREMIUM VISUAL QUALITY (this must rival award-winning Three.js sites like igloo.inc):
-- 15000+ particles with CanvasTexture radial gradient sprite (64x64 canvas, warm glow falloff)
-- 3-point lighting rig: key DirectionalLight + colored fill light + rim light + AmbientLight
-- 2 orbiting colored SpotLights (position updated with sin/cos in animate loop)
-- Reflective floor: PlaneGeometry(100,100) + MeshStandardMaterial({ color:0x111111, metalness:0.95, roughness:0.05 })
-- FogExp2(backgroundColor, 0.015) for depth atmosphere
-- easeInOutCubic on ALL morph transitions — NEVER use linear lerp for shape morphing
-- Dynamic light intensity pulsing: light.intensity = base + Math.sin(elapsed * 2) * 0.3
-- Slow particle system rotation: particleSystem.rotation.y = elapsed * 0.03
-- Ambient background dust: second Points object with 2000 tiny white particles in large volume
-- Wireframe IcosahedronGeometry(2,2) accent, opacity 0.15, slowly rotating
-- CatmullRomCurve3 tube trail ribbons as accent geometry
-- Mouse parallax on camera group: track mouse position, lerp camera group offset
+PREMIUM VISUAL QUALITY:
+- 3-point lighting rig: key + colored fill + rim + ambient
+- Orbiting colored spotlights (sin/cos position in animate loop)
+- FogExp2 or Fog for depth atmosphere
+- easeInOutCubic on ALL transitions — never linear lerp
+- Dynamic light pulsing: intensity = base + Math.sin(elapsed * 2) * 0.3
+- Mouse parallax on camera group for subtle interactivity
+- Shadows enabled where appropriate (castShadow, receiveShadow)
+- Ground plane with appropriate material (reflective, grassy, snowy — match the scene)
+- Ambient background elements (dust particles, stars, snowflakes — match the mood)
+- Accent geometry (wireframe shapes, flowing tubes, orbiting rings — match the aesthetic)
+- If using particles: 15000+ with CanvasTexture soft sprite, AdditiveBlending, depthWrite:false
 
-SHAPE MORPHING PATTERN:
-- Store each shape as a separate Float32Array (shape1, shape2, shape3, etc.)
-- In the animation loop, use scroll progress to determine which shapes to morph between
-- Each transition uses block-scoped const t with easeInOutCubic — this is valid JS:
-  if (progress < 0.3) { const t = easeInOutCubic(progress / 0.3); /* morph A→B */ }
-  else if (progress < 0.6) { const t = easeInOutCubic((progress-0.3) / 0.3); /* morph B→C */ }
+SCROLL ANIMATION:
+- Map scrollProgress 0-1 to scene progression
+- Each transition block uses block-scoped const t with easeInOutCubic
+- Camera keyframes interpolated with lerp based on scrollProgress
+- Objects appear/disappear/transform as scroll progresses
 
-HTML STRUCTURE (use exactly this):
-body tag: style="margin:0;overflow-x:hidden;background:#000"
-  canvas tag: id="bg" style="position:fixed;top:0;left:0;width:100%;height:100%"
-  div tag: style="height:800vh" (scroll spacer, nothing else)
+HTML STRUCTURE:
+body: margin:0; overflow-x:hidden; background:matched-to-scene
+  canvas id="bg": position:fixed; top:0; left:0; width:100%; height:100%
+  div: height:800vh (invisible scroll spacer)
 
-VARIABLE NAMING RULES (CRITICAL — violations cause runtime crashes):
-- NEVER declare two variables with the same name at the script's top level
+VARIABLE NAMING RULES (CRITICAL — violations crash the page):
+- NEVER declare two variables with the same name at the top level
 - Use UNIQUE descriptive names: 'palette' not 'colors', 'particleColors' not 'colors'
-- Every variable referenced in updateScene/animate MUST be declared in accessible scope
-- NEVER allocate new THREE.Vector3/Color inside animation loops — pre-allocate and reuse
-- const/let inside separate if/else blocks are block-scoped and FINE to reuse names
+- Every variable in updateScene/animate MUST be declared in accessible scope
+- NEVER allocate new THREE objects inside animation loops
+- Block-scoped const/let in if/else blocks CAN reuse names — this is valid JS
 
+EXCEED EXPECTATIONS. Make something that makes people stop and stare.
 Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>.
 No explanations, no markdown fences, no preamble. JUST the code.`
       }
