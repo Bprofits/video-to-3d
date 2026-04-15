@@ -39,6 +39,42 @@ The car's wheels should be recognizable circles. The engine should have visible 
 The neural network should have interconnected node clusters with visible connection lines.`,
     creative: "This visual IS the brand. It should feel like watching a Lamborghini commercial directed by Ridley Scott but for AI software. The CRM-as-car metaphor must come alive — the viewer should FEEL each component: the raw power of the engine (automation), the precision of the transmission (data routing), the beauty of the assembled car (the complete platform). Orange particles against pure black. Pulsing energy. Dramatic reveals. Make people stop scrolling and say 'holy shit, I need this.'",
   },
+  nature: {
+    business: "",
+    style: "Organic earth tones — deep greens (#1a4d2e, #2d7a4f), warm amber (#c4883c), sky blue (#87CEEB), soft white fog. Natural, peaceful, immersive. Golden hour lighting.",
+    effects: "Terrain landscape with noise-displaced PlaneGeometry and green flatShading material. Procedural trees (cone + cylinder groups) placed with instanced meshes. Animated water plane with sine-wave vertex displacement, semi-transparent blue. Falling leaf particles drifting with wind sway. Fog that thickens as camera moves deeper. Firefly particles at dusk (tiny warm yellow dots, random blinking).",
+    creative: "Make it feel like walking into an ancient forest at golden hour. The camera should float through slowly — first seeing the landscape from above, then descending into the trees, passing over water, ending in a meadow with fireflies. Peaceful, awe-inspiring, alive.",
+  },
+  space: {
+    business: "",
+    style: "Deep black (#000011) with nebula purples (#6B3FA0, #9B59B6), electric blue (#00BFFF), star white. Cosmic, vast, cinematic. Lens flare and glow effects.",
+    effects: "Star field with 20000+ tiny white particles spread across a huge sphere. Nebula clouds built from large semi-transparent sphere geometry with noise-displaced vertices and additive blending. Planet with IcosahedronGeometry, noise displacement for terrain, and a glowing atmosphere ring (torus). Asteroid belt particles orbiting on a ring path. Camera travels from deep space, past the nebula, orbiting the planet, then diving toward the surface.",
+    creative: "Make it feel like a Hubble telescope flythrough. The scale should feel MASSIVE — stars everywhere, a nebula that fills the viewport with color, a planet that grows from a dot to filling the screen. Slow, majestic camera movement. The kind of visual that makes you feel small.",
+  },
+  tech: {
+    business: "",
+    style: "Dark navy (#0a0e27) with cyan (#00F0FF), electric blue (#0066FF), white grid lines. Matrix/Tron aesthetic. Sharp, clean, digital.",
+    effects: "Circuit board grid pattern on a flat plane with glowing line traces that animate along paths. Floating wireframe geometry (icosahedron, torus knot) rotating slowly. Data stream particles flowing upward in columns. Central glowing sphere that pulses with energy. Holographic HUD-style rings orbiting the center. Camera pulls back to reveal the full grid, then pushes through the data streams.",
+    creative: "Think Tron Legacy meets a Bloomberg terminal. Everything should feel precise, digital, electric. Glowing cyan lines on dark backgrounds. Data flowing like rivers of light. The camera should move with mechanical precision — smooth, deliberate, calculated.",
+  },
+  luxury: {
+    business: "",
+    style: "Pure black (#000000) with gold (#D4AF37, #FFD700), warm white (#FFF8E7), subtle champagne (#F7E7CE). Minimalist, premium, aspirational. Soft rim lighting.",
+    effects: "Minimal particle count (8000) but with large soft gold sprites for a bokeh-like feel. Floating geometric shapes — clean TorusKnotGeometry and SphereGeometry with reflective MeshStandardMaterial (metalness 1.0, roughness 0.1). Reflective floor with mirror-like finish. Shapes emerge from darkness one at a time, rotating slowly. Subtle gold dust particles drifting. Camera moves in slow, sweeping arcs.",
+    creative: "Think Cartier or Rolex commercial. Less is more. Every element should feel intentional and expensive. Slow reveals from darkness. Gold catching light. The feeling of walking into a vault of beautiful objects. Restraint is luxury.",
+  },
+  abstract: {
+    business: "",
+    style: "Dark background (#0a0a0a) with vibrant color cycling — hot pink (#FF1493), electric violet (#8B00FF), cyan (#00FFFF), lime (#39FF14). Bold, psychedelic, experimental.",
+    effects: "Organic blob shapes using IcosahedronGeometry with heavy noise displacement that morphs over time. Color-cycling particles that shift hue based on elapsed time. Multiple blob shapes at different scales, merging and separating. Wireframe overlays with additive blending. Camera orbits erratically with slight randomness. Shapes should breathe — pulsing scale with sin waves.",
+    creative: "Make it feel like a music visualizer on acid. Colors should shift constantly. Shapes should morph and breathe like living organisms. Nothing should be static — everything moves, pulses, shifts. The kind of visual you stare at for 5 minutes without blinking.",
+  },
+  ocean: {
+    business: "",
+    style: "Deep ocean blue (#001a33, #003366) with turquoise (#00CED1), white foam (#F0F8FF), dark depths (#000d1a). Immersive, calming, powerful.",
+    effects: "Animated water surface using PlaneGeometry with layered sine/cosine vertex displacement for realistic waves. Underwater caustic light patterns (moving spotlight with sin-modulated position). Particle bubbles rising from the depths. Bioluminescent particles (tiny cyan dots with random pulse). Volumetric light rays from above using spotlight with angle. Camera starts above water, dives below, explores the deep.",
+    creative: "Make it feel like a deep-sea documentary. Start with the glittering surface, then plunge beneath. The deeper you scroll, the darker and more mysterious it gets. Bioluminescent creatures appear in the abyss. Calming but awe-inspiring.",
+  },
 };
 
 // -----------------------------------------------
@@ -637,7 +673,9 @@ export default function VideoTo3DAnimator() {
               </div>
               <style>{`@keyframes fadeIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }`}</style>
               <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 24 }}>
-                Type <span style={{ color: theme.accent, fontFamily: "monospace" }}>/driveai</span> in any field to load the Drive AI preset. Or describe your own vision.
+                Type a slash command in any field to load a preset: {Object.keys(PRESETS).map((k, i) => (
+                  <span key={k}><span style={{ color: theme.accent, fontFamily: "monospace" }}>/{k}</span>{i < Object.keys(PRESETS).length - 1 ? "  " : ""}</span>
+                ))}
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>

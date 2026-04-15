@@ -56,7 +56,13 @@ Type these in **any briefing field** to instantly load a preset. All 4 fields fi
 
 | Command | Description |
 |---------|-------------|
-| `/driveai` | **Drive AI Sales preset** — orange (#E87A00) / black brand colors, CRM-as-car metaphor (DNA helix → Engine → Drivetrain → Car → Neural Network), premium automotive holographic feel |
+| `/driveai` | **Drive AI Sales** — orange/black, CRM-as-car metaphor (DNA → Engine → Drivetrain → Car → Neural Network), premium automotive holographic |
+| `/nature` | **Forest/landscape** — earth greens, amber, terrain geometry, procedural trees, animated water, falling leaves, fireflies at dusk |
+| `/space` | **Cosmic** — deep black, nebula purples, star field (20k particles), planet with atmosphere ring, asteroid belt, Hubble-style flythrough |
+| `/tech` | **Digital/Matrix** — navy + cyan, circuit grid with animated traces, data streams, wireframe geometry, holographic HUD rings, Tron aesthetic |
+| `/luxury` | **Premium minimal** — black + gold, bokeh particles, reflective geometry, mirror floor, slow reveals from darkness, Cartier/Rolex feel |
+| `/abstract` | **Psychedelic** — color-cycling particles, organic noise-displaced blobs, morphing shapes, music visualizer feel |
+| `/ocean` | **Deep sea** — ocean blues, animated wave surface, underwater caustics, rising bubbles, bioluminescent particles, surface-to-abyss journey |
 
 ### Adding Your Own Presets
 
