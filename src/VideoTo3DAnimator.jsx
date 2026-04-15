@@ -1,15 +1,12 @@
-import { useState, useRef, useCallback, useEffect } from "react";
-import * as THREE from "three";
-import { parseColmapImages, parseColmapCameras, colmapToAnimationData } from "./lib/colmapParser";
-import { loadSplatFile } from "./lib/splatViewer";
-import { THREEJS_SKILLS, GSAP_SCROLLTRIGGER_SKILLS } from "./lib/skills";
+import { useState, useRef, useCallback } from "react";
+import { THREEJS_SKILLS } from "./lib/skills";
+// GSAP skills removed — conflicts with sandbox iframe
 import { validateAndFixCode } from "./lib/codeValidator";
 
 // -----------------------------------------------
 // CONFIGURATION
 // -----------------------------------------------
 const FRAME_SAMPLE_COUNT = 24;
-const SPLINE_SEGMENTS = 300;
 
 const font = `'Instrument Sans', 'SF Pro Display', system-ui, sans-serif`;
 const theme = {
@@ -17,6 +14,31 @@ const theme = {
   border: "#25252f", borderActive: "#E87A00", text: "#e8e6e3",
   textMuted: "#7a7880", accent: "#E87A00", accentGlow: "rgba(232,122,0,0.15)",
   accentSoft: "rgba(232,122,0,0.08)", danger: "#ff4444", success: "#2dd4a0",
+};
+
+// -----------------------------------------------
+// PRESET COMMANDS — type /command in briefing fields
+// -----------------------------------------------
+const PRESETS = {
+  driveai: {
+    business: "Drive AI Sales Inc. — AI-powered lead response automation for car dealerships. Responds to every lead in under 60 seconds via text, email, and voice. 24/7. Website: https://driveaisales.com",
+    style: "Dark cinematic black (#000000) background. Primary orange (#E87A00) for energy and CTA elements. Cream (#F4DEC9) accents. Fonts: Bebas Neue for headlines, Barlow for body. Premium automotive tech feel — holographic, futuristic, high-end. Think luxury car commercial meets Silicon Valley tech demo.",
+    effects: `The visual journey tells the story of a CRM system as a CAR — each part of the car maps to CRM architecture:
+
+SCENE FLOW (particle morph sequence):
+1. DNA DOUBLE HELIX — represents the foundational data/code, the blueprint of the system
+2. ENGINE (V8 style) — workflow automation & AI processing, the power that drives everything
+3. DRIVETRAIN / TRANSMISSION — integrations & APIs routing data between systems
+4. FULL CAR SILHOUETTE — the complete CRM system assembled, wheels = customer touchpoints
+5. NEURAL NETWORK — connected intelligence, the AI brain orchestrating it all
+
+Each shape should be built from 15000+ glowing orange particles with soft sprite textures.
+Scatter/explode transitions between shapes. Reflective dark floor. FogExp2 atmosphere.
+Orbiting orange and blue spotlights. Camera orbits and dollies dramatically between scenes.
+The car's wheels should be recognizable circles. The engine should have visible cylinder shapes.
+The neural network should have interconnected node clusters with visible connection lines.`,
+    creative: "This visual IS the brand. It should feel like watching a Lamborghini commercial directed by Ridley Scott but for AI software. The CRM-as-car metaphor must come alive — the viewer should FEEL each component: the raw power of the engine (automation), the precision of the transmission (data routing), the beauty of the assembled car (the complete platform). Orange particles against pure black. Pulsing energy. Dramatic reveals. Make people stop scrolling and say 'holy shit, I need this.'",
+  },
 };
 
 // -----------------------------------------------
@@ -58,23 +80,15 @@ function extractFrames(file, count) {
         const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const dataUrl = canvas.toDataURL("image/jpeg", 0.7);
 
-        // Calculate frame-to-frame motion metrics
-        let motion = { dx: 0, dy: 0, magnitude: 0, brightness: 0, contrast: 0 };
+        let motion = { dx: 0, dy: 0, magnitude: 0 };
         if (prevImageData) {
           motion = calculateMotionMetrics(prevImageData, imageData, canvas.width, canvas.height);
         }
-
-        // Calculate brightness and contrast of current frame
         const stats = calculateFrameStats(imageData);
 
         frames.push({
-          time: times[idx],
-          dataUrl,
-          base64: dataUrl.split(",")[1],
-          motion,
-          brightness: stats.brightness,
-          contrast: stats.contrast,
-          dominantRegion: stats.dominantRegion,
+          time: times[idx], dataUrl, base64: dataUrl.split(",")[1],
+          motion, brightness: stats.brightness, contrast: stats.contrast, dominantRegion: stats.dominantRegion,
         });
 
         prevImageData = imageData;
@@ -85,14 +99,10 @@ function extractFrames(file, count) {
       seekNext();
     };
 
-    video.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error("Failed to load video"));
-    };
+    video.onerror = () => { URL.revokeObjectURL(url); reject(new Error("Failed to load video")); };
   });
 }
 
-// Calculate motion between two frames using block matching
 function calculateMotionMetrics(prev, curr, w, h) {
   const blockSize = 32;
   const blocksX = Math.floor(w / blockSize);
@@ -101,120 +111,51 @@ function calculateMotionMetrics(prev, curr, w, h) {
 
   for (let by = 0; by < blocksY; by++) {
     for (let bx = 0; bx < blocksX; bx++) {
-      const ox = bx * blockSize;
-      const oy = by * blockSize;
-      let minDiff = Infinity;
-      let bestDx = 0, bestDy = 0;
-
-      // Search in a small window around the block
+      const ox = bx * blockSize, oy = by * blockSize;
+      let minDiff = Infinity, bestDx = 0, bestDy = 0;
       for (let sy = -4; sy <= 4; sy += 2) {
         for (let sx = -4; sx <= 4; sx += 2) {
           let diff = 0;
           for (let py = 0; py < blockSize; py += 4) {
             for (let px = 0; px < blockSize; px += 4) {
               const ci = ((oy + py) * w + (ox + px)) * 4;
-              const ny = oy + py + sy;
-              const nx = ox + px + sx;
+              const ny = oy + py + sy, nx = ox + px + sx;
               if (ny >= 0 && ny < h && nx >= 0 && nx < w) {
                 const pi = (ny * w + nx) * 4;
-                diff += Math.abs(curr.data[ci] - prev.data[pi]);
-                diff += Math.abs(curr.data[ci + 1] - prev.data[pi + 1]);
-                diff += Math.abs(curr.data[ci + 2] - prev.data[pi + 2]);
+                diff += Math.abs(curr.data[ci] - prev.data[pi]) + Math.abs(curr.data[ci + 1] - prev.data[pi + 1]) + Math.abs(curr.data[ci + 2] - prev.data[pi + 2]);
               }
             }
           }
-          if (diff < minDiff) {
-            minDiff = diff;
-            bestDx = sx;
-            bestDy = sy;
-          }
+          if (diff < minDiff) { minDiff = diff; bestDx = sx; bestDy = sy; }
         }
       }
-      totalDx += bestDx;
-      totalDy += bestDy;
-      totalDiff += minDiff;
+      totalDx += bestDx; totalDy += bestDy; totalDiff += minDiff;
     }
   }
 
-  const numBlocks = blocksX * blocksY;
-  return {
-    dx: totalDx / numBlocks,
-    dy: totalDy / numBlocks,
-    magnitude: Math.sqrt(Math.pow(totalDx / numBlocks, 2) + Math.pow(totalDy / numBlocks, 2)),
-    changeMagnitude: totalDiff / numBlocks / 1000,
-  };
+  const n = blocksX * blocksY;
+  return { dx: totalDx / n, dy: totalDy / n, magnitude: Math.sqrt((totalDx / n) ** 2 + (totalDy / n) ** 2) };
 }
 
-// Calculate brightness, contrast, and dominant region of a frame
 function calculateFrameStats(imageData) {
-  const d = imageData.data;
-  const len = d.length;
-  let totalBright = 0;
-  let count = 0;
-  const quadrants = [0, 0, 0, 0]; // TL, TR, BL, BR brightness
-  const w = imageData.width;
-  const h = imageData.height;
-
+  const d = imageData.data, len = d.length, w = imageData.width, h = imageData.height;
+  let totalBright = 0, count = 0;
+  const quadrants = [0, 0, 0, 0];
   for (let i = 0; i < len; i += 16) {
-    const r = d[i], g = d[i + 1], b = d[i + 2];
-    const bright = (r + g + b) / 3;
-    totalBright += bright;
-    count++;
-
-    const px = (i / 4) % w;
-    const py = Math.floor((i / 4) / w);
-    const qi = (py < h / 2 ? 0 : 2) + (px < w / 2 ? 0 : 1);
-    quadrants[qi] += bright;
+    const bright = (d[i] + d[i + 1] + d[i + 2]) / 3;
+    totalBright += bright; count++;
+    const px = (i / 4) % w, py = Math.floor((i / 4) / w);
+    quadrants[(py < h / 2 ? 0 : 2) + (px < w / 2 ? 0 : 1)] += bright;
   }
-
-  const avgBright = totalBright / count;
-  const maxQ = quadrants.indexOf(Math.max(...quadrants));
   const regions = ["top-left", "top-right", "bottom-left", "bottom-right"];
-
-  return {
-    brightness: avgBright / 255,
-    contrast: 0.5,
-    dominantRegion: regions[maxQ],
-  };
+  return { brightness: totalBright / count / 255, contrast: 0.5, dominantRegion: regions[quadrants.indexOf(Math.max(...quadrants))] };
 }
 
 // -----------------------------------------------
-// PRESET COMMANDS — type /command in briefing fields
+// CLAUDE API
 // -----------------------------------------------
-const PRESETS = {
-  driveai: {
-    business: "Drive AI Sales Inc. — AI-powered lead response automation for car dealerships. Responds to every lead in under 60 seconds via text, email, and voice. 24/7. Website: https://driveaisales.com",
-    style: "Dark cinematic black (#000000) background. Primary orange (#E87A00) for energy and CTA elements. Cream (#F4DEC9) accents. Fonts: Bebas Neue for headlines, Barlow for body. Premium automotive tech feel — holographic, futuristic, high-end. Think luxury car commercial meets Silicon Valley tech demo.",
-    effects: `The visual journey tells the story of a CRM system as a CAR — each part of the car maps to CRM architecture:
-
-SCENE FLOW (particle morph sequence):
-1. DNA DOUBLE HELIX — represents the foundational data/code, the blueprint of the system
-2. ENGINE (V8 style) — workflow automation & AI processing, the power that drives everything
-3. DRIVETRAIN / TRANSMISSION — integrations & APIs routing data between systems
-4. FULL CAR SILHOUETTE — the complete CRM system assembled, wheels = customer touchpoints
-5. NEURAL NETWORK — connected intelligence, the AI brain orchestrating it all
-
-Each shape should be built from 15000+ glowing orange particles with soft sprite textures.
-Scatter/explode transitions between shapes. Reflective dark floor. FogExp2 atmosphere.
-Orbiting orange and blue spotlights. Camera orbits and dollies dramatically between scenes.
-The car's wheels should be recognizable circles. The engine should have visible cylinder shapes.
-The neural network should have interconnected node clusters with visible connection lines.`,
-    creative: "This visual IS the brand. It should feel like watching a Lamborghini commercial directed by Ridley Scott but for AI software. The CRM-as-car metaphor must come alive — the viewer should FEEL each component: the raw power of the engine (automation), the precision of the transmission (data routing), the beauty of the assembled car (the complete platform). Orange particles against pure black. Pulsing energy. Dramatic reveals. Make people stop scrolling and say 'holy shit, I need this.'",
-  },
-};
-
-// -----------------------------------------------
-// SINGLE-STAGE PIPELINE
-// Everything in one Opus call: frames + briefing + skills → complete HTML
-// No telephone game — Claude sees the actual video AND the creative direction
-// -----------------------------------------------
-
 async function callClaude(apiKey, messages, maxTokens, system) {
-  const body = {
-    model: "claude-opus-4-20250514",
-    max_tokens: maxTokens,
-    messages,
-  };
+  const body = { model: "claude-opus-4-20250514", max_tokens: maxTokens, messages };
   if (system) body.system = system;
 
   const response = await fetch("/api/claude", {
@@ -232,19 +173,21 @@ async function callClaude(apiKey, messages, maxTokens, system) {
   return data.content?.map((c) => c.text || "").join("") || "";
 }
 
-// SINGLE STAGE: Video frames + briefing + skills → complete HTML
+// -----------------------------------------------
+// SINGLE-STAGE GENERATION
+// Frames + briefing + skills → complete HTML in one Opus call
+// -----------------------------------------------
 async function generateFromVideo(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
   const motionSummary = frames.map((f, i) =>
     `Frame ${i + 1} (t=${f.time.toFixed(1)}s): motion=${f.motion.magnitude.toFixed(2)} brightness=${f.brightness.toFixed(2)}`
   ).join("\n");
 
-  // Build image blocks — Claude sees every frame
   const imageBlocks = frames.map((f, i) => [
     { type: "image", source: { type: "base64", media_type: "image/jpeg", data: f.base64 } },
     { type: "text", text: `Frame ${i + 1} at t=${f.time.toFixed(1)}s` },
   ]).flat();
 
-  onProgress && onProgress("Analyzing video + generating Three.js visual FX...");
+  onProgress("Analyzing video + generating Three.js visual FX...");
 
   const rawHTML = await callClaude(apiKey, [{
     role: "user",
@@ -273,20 +216,19 @@ Study the video frames carefully and determine:
 5. Transitions between scenes (morphs, fades, cuts, dissolves)
 
 THEN choose the RIGHT Three.js techniques to recreate it. DO NOT default to particles.
-- If the video shows a landscape → build terrain geometry with noise displacement
-- If it shows snowfall → use falling particle system with drift and reset
-- If it shows a car → build it from grouped geometry (boxes, cylinders), not random particles
-- If it shows abstract art → use shader materials, noise displacement, organic shapes
-- If it shows architecture → use instanced meshes, clean geometry, shadows
-- If it shows space → use star field particles, planet spheres, nebula fog
-- If it shows nature → use terrain, trees (cones+cylinders), water plane with animated vertices
-- If it shows data/tech → use grid patterns, circuit lines, glowing wireframes, data streams
-- If it shows particles → THEN use particles, with soft sprite textures and additive blending
+- If the video shows a landscape: build terrain geometry with noise displacement
+- If it shows snowfall: use falling particle system with drift and reset
+- If it shows a car: build it from grouped geometry (boxes, cylinders), not random particles
+- If it shows abstract art: use shader materials, noise displacement, organic shapes
+- If it shows architecture: use instanced meshes, clean geometry, shadows
+- If it shows space: use star field particles, planet spheres, nebula fog
+- If it shows nature: use terrain, trees (cones+cylinders), water plane with animated vertices
+- If it shows data/tech: use grid patterns, circuit lines, glowing wireframes, data streams
+- If it shows particles: THEN use particles, with soft sprite textures and additive blending
 MIX techniques freely. A scene can have terrain + particles + geometry + fog all at once.
 
 THIS IS A PURE VISUAL FX PAGE — NO TEXT, NO HEADINGS, NO PARAGRAPHS, NO WEB DESIGN.
 The ENTIRE page is just the Three.js canvas filling the screen with scroll-driven visual effects.
-Think of it as a visual journey that takes someone on a trip.
 
 REQUIREMENTS:
 1. Scroll-driven — scrolling progresses through the visual experience (800vh scroll spacer)
@@ -311,7 +253,6 @@ SCROLL ANIMATION:
 - Map scrollProgress 0-1 to scene progression
 - Each transition block uses block-scoped const t with easeInOutCubic
 - Camera keyframes interpolated with lerp based on scrollProgress
-- Objects appear/disappear/transform as scroll progresses
 
 HTML STRUCTURE:
 body: margin:0; overflow-x:hidden; background:matched-to-scene
@@ -323,7 +264,10 @@ VARIABLE NAMING RULES (CRITICAL — violations crash the page):
 - Use UNIQUE descriptive names: 'palette' not 'colors', 'particleColors' not 'colors'
 - Every variable in updateScene/animate MUST be declared in accessible scope
 - NEVER allocate new THREE objects inside animation loops
-- Block-scoped const/let in if/else blocks CAN reuse names — this is valid JS
+- Block-scoped const/let in if/else blocks CAN reuse names
+
+YOU MUST include a working requestAnimationFrame loop that calls renderer.render(scene, camera).
+YOU MUST call animate() at the end of the script to start the loop.
 
 EXCEED EXPECTATIONS. Make something that makes people stop and stare.
 Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>.
@@ -331,9 +275,10 @@ No explanations, no markdown fences, no preamble. JUST the code.`
       }
     ]
   }], 32000,
-  // System prompt with full skills reference
-  `You are a world-class Three.js visual effects developer. You create award-winning scroll-driven visual experiences. You know these techniques:\n\n${THREEJS_SKILLS}\n\n${GSAP_SCROLLTRIGGER_SKILLS}`
+  `You are a world-class Three.js visual effects developer. You create award-winning scroll-driven visual experiences.\n\n${THREEJS_SKILLS}`
   );
+
+  onProgress("Validating and fixing code...");
 
   let html = rawHTML.replace(/```html|```/g, "").trim();
   const docIdx = html.indexOf("<!DOCTYPE");
@@ -342,25 +287,29 @@ No explanations, no markdown fences, no preamble. JUST the code.`
   else if (htmlIdx >= 0) html = html.substring(htmlIdx);
   else throw new Error("Claude did not return valid HTML");
 
-  return html;
+  const { html: fixedHTML, fixes } = validateAndFixCode(html);
+  if (fixes.length > 0) console.log("Auto-fixes applied:", fixes);
+
+  return { html: fixedHTML, fixes };
 }
 
-// REFINEMENT: Fix issues with existing code
+// REFINEMENT
 async function refineCode(currentHTML, issueDescription, apiKey) {
-  const refined = await callClaude(apiKey, [
-    {
-      role: "user",
-      content: `Here is a Three.js scroll-driven PURE VISUAL FX page (no text overlays, no web design — just visual effects). It has issues that need fixing:
+  const refined = await callClaude(apiKey, [{
+    role: "user",
+    content: `Here is a Three.js scroll-driven PURE VISUAL FX page. It has issues:
 
 ISSUES: ${issueDescription}
 
 CURRENT CODE:
 ${currentHTML}
 
-Fix the issues while keeping the overall structure. This is PURE VISUAL FX — do NOT add any text, headings, or HTML overlays. Return the COMPLETE fixed HTML file. No explanations, just the code starting with <!DOCTYPE html>.`
-    }
-  ], 32000,
-  `You are a Three.js expert fixing code issues. Apply these best practices:\n${THREEJS_SKILLS}`
+Fix the issues. Keep the overall structure. PURE VISUAL FX — no text, no headings, no HTML overlays.
+YOU MUST include a working requestAnimationFrame loop with renderer.render(scene, camera).
+YOU MUST call animate() at the end to start the loop.
+Return the COMPLETE fixed HTML starting with <!DOCTYPE html>.`
+  }], 32000,
+  `You are a Three.js expert fixing code issues.\n\n${THREEJS_SKILLS}`
   );
 
   let html = refined.replace(/```html|```/g, "").trim();
@@ -369,286 +318,46 @@ Fix the issues while keeping the overall structure. This is PURE VISUAL FX — d
   return html;
 }
 
-// Main pipeline — single stage + auto-fix
-async function analyzeFramesWithClaude(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
-  // Single stage: Video + Briefing + Skills → Complete HTML
-  const html = await generateFromVideo(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress);
-
-  // Auto-fix common code issues
-  onProgress && onProgress("Validating and fixing code...");
-  const { html: fixedHTML, fixes } = validateAndFixCode(html);
-  if (fixes.length > 0) {
-    console.log("Auto-fixes applied:", fixes);
+// -----------------------------------------------
+// HELPER: detect /command in briefing input
+// -----------------------------------------------
+function handleBriefingInput(value, field, setBriefing, setPresetActive) {
+  const cmd = value.match(/\/(\w+)/);
+  if (cmd && PRESETS[cmd[1]]) {
+    setBriefing({ ...PRESETS[cmd[1]] });
+    setPresetActive(cmd[1]);
+    return;
   }
-
-  return { html: fixedHTML, fixes };
-}
-
-// -----------------------------------------------
-// ENHANCED THREE.JS SCENE BUILDER
-// -----------------------------------------------
-function buildScene(container, cameraData, duration) {
-  const w = container.clientWidth;
-  const h = container.clientHeight;
-
-  const scene = new THREE.Scene();
-  scene.background = new THREE.Color("#0a0a0c");
-
-  const camera = new THREE.PerspectiveCamera(60, w / h, 0.1, 500);
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(w, h);
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  container.textContent = "";
-  container.appendChild(renderer.domElement);
-
-  // Minimal grid for spatial reference
-  const grid = new THREE.GridHelper(40, 20, 0x1a1a22, 0x0f0f14);
-  grid.position.y = -2;
-  scene.add(grid);
-  scene.add(new THREE.AmbientLight(0x334455, 0.4));
-
-  // Camera path from keyframes
-  const kf = cameraData.keyframes;
-  const cuts = cameraData.cuts || [];
-  const posPoints = kf.map((k) => new THREE.Vector3(k.position[0], k.position[1], k.position[2]));
-  const lookAtPoints = kf.map((k) => new THREE.Vector3(k.lookAt[0], k.lookAt[1], k.lookAt[2]));
-  const kfTimes = kf.map((k) => k.time);
-
-  const positionCurve = new THREE.CatmullRomCurve3(posPoints, false, "catmullrom", 0.3);
-  const lookAtCurve = new THREE.CatmullRomCurve3(lookAtPoints, false, "catmullrom", 0.3);
-
-  // Visualize camera path as glowing orange line
-  const pathPoints = positionCurve.getPoints(SPLINE_SEGMENTS);
-  const pathGeo = new THREE.BufferGeometry().setFromPoints(pathPoints);
-  scene.add(new THREE.Line(pathGeo, new THREE.LineBasicMaterial({ color: 0xE87A00, transparent: true, opacity: 0.6 })));
-
-  // Keyframe markers
-  posPoints.forEach((p, i) => {
-    const isCut = cuts.includes(i);
-    const marker = new THREE.Mesh(
-      new THREE.SphereGeometry(0.12, 8, 6),
-      new THREE.MeshBasicMaterial({ color: isCut ? 0xff4444 : 0xE87A00 })
-    );
-    marker.position.copy(p);
-    scene.add(marker);
-
-    // LookAt direction line
-    const dir = lookAtPoints[i].clone().sub(p).normalize().multiplyScalar(1.5);
-    const lineGeo = new THREE.BufferGeometry().setFromPoints([p, p.clone().add(dir)]);
-    scene.add(new THREE.Line(lineGeo, new THREE.LineBasicMaterial({ color: 0x446688, transparent: true, opacity: 0.4 })));
-  });
-
-  // Moving camera indicator (follows playback)
-  const camIndicator = new THREE.Mesh(
-    new THREE.ConeGeometry(0.15, 0.4, 4),
-    new THREE.MeshBasicMaterial({ color: 0xE87A00, wireframe: true })
-  );
-  scene.add(camIndicator);
-
-  // Static overview camera that watches the path from above
-  const overviewCam = camera;
-  // Position overview camera to see the full path
-  const bbox = new THREE.Box3().setFromPoints(posPoints);
-  const center = bbox.getCenter(new THREE.Vector3());
-  const size = bbox.getSize(new THREE.Vector3());
-  const maxDim = Math.max(size.x, size.y, size.z);
-  overviewCam.position.set(center.x + maxDim * 0.8, center.y + maxDim * 0.6, center.z + maxDim * 0.8);
-  overviewCam.lookAt(center);
-
-  // Animation
-  const totalDuration = kfTimes[kfTimes.length - 1] || duration;
-  let animTime = 0;
-  let playing = true;
-  let speed = 1;
-  const clock = new THREE.Clock();
-
-  const state = {
-    get playing() { return playing; },
-    set playing(v) { playing = v; if (v) clock.getDelta(); },
-    get speed() { return speed; },
-    set speed(v) { speed = v; },
-    get progress() { return animTime / totalDuration; },
-    set progress(v) { animTime = v * totalDuration; },
-    totalDuration,
-    dispose: null,
-    exportJSON: () => JSON.stringify(cameraData, null, 2),
-    exportThreeJSCode: () => generateThreeJSCode(cameraData),
-    renderer, scene, camera,
-  };
-
-  let frameId;
-  const animate = () => {
-    frameId = requestAnimationFrame(animate);
-    if (playing) { animTime += clock.getDelta() * speed; if (animTime > totalDuration) animTime = 0; }
-    else { clock.getDelta(); }
-
-    const t = Math.max(0, Math.min(1, animTime / totalDuration));
-    const pos = positionCurve.getPoint(t);
-    const look = lookAtCurve.getPoint(t);
-
-    // Move camera indicator along the path
-    camIndicator.position.copy(pos);
-    camIndicator.lookAt(look);
-    camIndicator.rotateX(Math.PI / 2);
-
-    renderer.render(scene, camera);
-  };
-
-  animate();
-
-  const onResize = () => {
-    const nw = container.clientWidth;
-    const nh = container.clientHeight;
-    camera.aspect = nw / nh;
-    camera.updateProjectionMatrix();
-    renderer.setSize(nw, nh);
-  };
-  window.addEventListener("resize", onResize);
-
-  state.dispose = () => {
-    cancelAnimationFrame(frameId);
-    window.removeEventListener("resize", onResize);
-    renderer.dispose();
-  };
-
-  return state;
-}
-
-// -----------------------------------------------
-// THREE.JS CODE GENERATOR
-// -----------------------------------------------
-function generateThreeJSCode(cameraData) {
-  const kf = cameraData.keyframes;
-  const totalTime = kf[kf.length - 1]?.time || 10;
-
-  return `// ============================================
-// SCROLL-DRIVEN 3D CAMERA PATH
-// Generated from video analysis
-// Scene: ${cameraData.scene_description || "Video camera path"}
-// Style: ${cameraData.camera_style || "cinematic"}
-// Duration: ${totalTime.toFixed(1)}s | ${kf.length} keyframes
-// ============================================
-//
-// HOW TO USE:
-// 1. Add <canvas id="bg"> and <div class="scroll-spacer" style="height:${Math.ceil(totalTime * 100)}vh"> to your HTML
-// 2. Style canvas: position:fixed; inset:0; z-index:0;
-// 3. Paste this code in a <script> tag after Three.js CDN
-// 4. Add your own 3D content (particles, models, etc) to the scene
-// 5. The camera will follow this path as the user scrolls
-//
-
-// ── SETUP ──
-var scene = new THREE.Scene();
-scene.background = new THREE.Color("#000000");
-var camera = new THREE.PerspectiveCamera(${kf[0]?.fov || 60}, innerWidth / innerHeight, 0.1, 500);
-var renderer = new THREE.WebGLRenderer({ canvas: document.querySelector("#bg"), antialias: true });
-renderer.setSize(innerWidth, innerHeight);
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-
-// ── CAMERA PATH KEYFRAMES ──
-// Each keyframe: { time, position: [x,y,z], lookAt: [x,y,z], fov }
-var keyframes = ${JSON.stringify(kf, null, 2)};
-
-// ── BUILD SMOOTH SPLINE CURVES ──
-var posPoints = keyframes.map(function(k) { return new THREE.Vector3(k.position[0], k.position[1], k.position[2]); });
-var lookPoints = keyframes.map(function(k) { return new THREE.Vector3(k.lookAt[0], k.lookAt[1], k.lookAt[2]); });
-var kfTimes = keyframes.map(function(k) { return k.time; });
-
-var positionCurve = new THREE.CatmullRomCurve3(posPoints, false, "catmullrom", 0.3);
-var lookAtCurve = new THREE.CatmullRomCurve3(lookPoints, false, "catmullrom", 0.3);
-var totalDuration = ${totalTime};
-
-// ── SCROLL-DRIVEN CAMERA ──
-// Maps scroll position (0-100%) to camera path position (0-100%)
-window.addEventListener("scroll", function() {
-  var scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
-  var scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-  var t = scrollHeight > 0 ? scrollTop / scrollHeight : 0;
-  t = Math.max(0, Math.min(1, t));
-
-  // Move camera along the path
-  camera.position.copy(positionCurve.getPoint(t));
-  camera.lookAt(lookAtCurve.getPoint(t));
-
-  // Interpolate FOV
-  var rawIdx = t * (keyframes.length - 1);
-  var idx = Math.floor(rawIdx);
-  var frac = rawIdx - idx;
-  if (idx < keyframes.length - 1) {
-    camera.fov = keyframes[idx].fov * (1 - frac) + keyframes[idx + 1].fov * frac;
-    camera.updateProjectionMatrix();
-  }
-}, { passive: true });
-
-// ── RESIZE ──
-window.addEventListener("resize", function() {
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(innerWidth, innerHeight);
-});
-
-// ── RENDER LOOP ──
-// Add your own scene content here (particles, models, lights, etc)
-// The camera path is already handled by scroll
-function animate() {
-  requestAnimationFrame(animate);
-  renderer.render(scene, camera);
-}
-animate();
-
-// ── INITIAL CAMERA POSITION ──
-camera.position.copy(positionCurve.getPoint(0));
-camera.lookAt(lookAtCurve.getPoint(0));
-`;
+  setBriefing(b => ({ ...b, [field]: value }));
 }
 
 // -----------------------------------------------
 // MAIN COMPONENT
 // -----------------------------------------------
 export default function VideoTo3DAnimator() {
-  const [stage, setStage] = useState("upload");
-  const [file, setFile] = useState(null);
+  const [stage, setStage] = useState("upload");  // upload → extracting → preview → briefing → analyzing → playing
   const [frames, setFrames] = useState([]);
   const [duration, setDuration] = useState(0);
   const [videoSize, setVideoSize] = useState({ w: 0, h: 0 });
   const [cameraData, setCameraData] = useState(null);
   const [error, setError] = useState(null);
   const [progress, setProgress] = useState(0);
-  const [animState, setAnimState] = useState(null);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [speed, setSpeed] = useState(1);
-  const [scrub, setScrub] = useState(0);
+  const [statusMsg, setStatusMsg] = useState("");
   const [apiKey, setApiKey] = useState(localStorage.getItem("anthropic_api_key") || "");
   const [showCode, setShowCode] = useState(false);
   const [autoFixes, setAutoFixes] = useState([]);
   const [briefing, setBriefing] = useState({ business: "", style: "", effects: "", creative: "" });
   const [presetActive, setPresetActive] = useState(null);
+  const [refineText, setRefineText] = useState("");
+  const [showRefine, setShowRefine] = useState(false);
 
-  const threeContainer = useRef(null);
-  const videoPreviewRef = useRef(null);
   const fileInputRef = useRef(null);
-  const scrubInterval = useRef(null);
 
-  useEffect(() => {
-    if (animState && isPlaying) {
-      scrubInterval.current = setInterval(() => {
-        setScrub(animState.progress);
-      }, 50);
-    }
-    return () => clearInterval(scrubInterval.current);
-  }, [animState, isPlaying]);
-
+  // ── File handling ──
   const handleFile = useCallback(async (f) => {
-    if (!f || !f.type.startsWith("video/")) {
-      setError("Please upload a valid video file");
-      return;
-    }
-    setFile(f);
+    if (!f || !f.type.startsWith("video/")) { setError("Please upload a valid video file"); return; }
     setError(null);
     setStage("extracting");
-
     try {
       const { frames: extracted, duration: dur, width: vw, height: vh } = await extractFrames(f, FRAME_SAMPLE_COUNT);
       setFrames(extracted);
@@ -667,97 +376,83 @@ export default function VideoTo3DAnimator() {
     if (f) handleFile(f);
   }, [handleFile]);
 
+  // ── Analysis ──
   const startAnalysis = useCallback(async () => {
     if (!apiKey) { setError("Please enter your Anthropic API key"); return; }
     localStorage.setItem("anthropic_api_key", apiKey);
+    setError(null);
     setStage("analyzing");
     setProgress(0);
+    setStatusMsg("Starting analysis...");
 
     const progressTimer = setInterval(() => {
-      setProgress((p) => Math.min(p + Math.random() * 5, 92));
-    }, 500);
+      setProgress((p) => Math.min(p + Math.random() * 4, 92));
+    }, 600);
 
     try {
-      const result = await analyzeFramesWithClaude(frames, duration, apiKey, videoSize.w, videoSize.h, briefing, (msg) => {
-        setError(null);
-        // Update progress message - could add a status state for this
+      const result = await generateFromVideo(frames, duration, apiKey, videoSize.w, videoSize.h, briefing, (msg) => {
+        setStatusMsg(msg);
       });
       clearInterval(progressTimer);
       setProgress(100);
       setCameraData(result.html);
       setAutoFixes(result.fixes || []);
-
-      setTimeout(() => {
-        setStage("playing");
-      }, 300);
+      setTimeout(() => setStage("playing"), 300);
     } catch (e) {
       clearInterval(progressTimer);
-      setError("Analysis failed: " + e.message);
+      setError("Generation failed: " + e.message);
       setStage("briefing");
     }
   }, [frames, duration, apiKey, videoSize, briefing]);
 
-  const togglePlay = () => {
-    if (animState) { animState.playing = !animState.playing; setIsPlaying(animState.playing); }
-  };
-
-  const handleScrub = (val) => {
-    const v = parseFloat(val);
-    setScrub(v);
-    if (animState) { animState.progress = v; animState.playing = false; setIsPlaying(false); }
-  };
-
-  const handleSpeed = (v) => { setSpeed(v); if (animState) animState.speed = v; };
-
-  const handleColmapImport = useCallback(async (files) => {
+  // ── Refine ──
+  const handleRefine = useCallback(async () => {
+    if (!refineText.trim() || !apiKey) return;
+    setStage("analyzing");
+    setProgress(0);
+    setStatusMsg("Refining visual FX...");
+    const pt = setInterval(() => setProgress(p => Math.min(p + Math.random() * 6, 92)), 500);
     try {
-      let imagesText = null, camerasText = null;
-      for (const f of files) {
-        const text = await f.text();
-        if (f.name.includes("images")) imagesText = text;
-        else if (f.name.includes("cameras")) camerasText = text;
-      }
-      if (!imagesText) { setError("Need images.txt from COLMAP"); return; }
-      const keyframes = parseColmapImages(imagesText);
-      const cameras = camerasText ? parseColmapCameras(camerasText) : {};
-      const data = colmapToAnimationData(keyframes, cameras);
-      setCameraData(data);
-      setDuration(data.keyframes[data.keyframes.length - 1]?.time || 10);
+      const rawFixed = await refineCode(cameraData, refineText.trim(), apiKey);
+      const { html: validated } = validateAndFixCode(rawFixed);
+      clearInterval(pt);
+      setProgress(100);
+      setCameraData(validated);
+      setRefineText("");
+      setShowRefine(false);
+      setTimeout(() => setStage("playing"), 300);
+    } catch (e) {
+      clearInterval(pt);
+      setError("Refinement failed: " + e.message);
       setStage("playing");
-      setTimeout(() => {
-        if (threeContainer.current) {
-          const state = buildScene(threeContainer.current, data, duration);
-          setAnimState(state);
-        }
-      }, 100);
-    } catch (e) {
-      setError("COLMAP import failed: " + e.message);
     }
-  }, [duration]);
+  }, [refineText, cameraData, apiKey]);
 
-  const handleSplatImport = useCallback(async (file) => {
-    if (!animState) { setError("Load a scene first before importing splats"); return; }
-    try {
-      const result = await loadSplatFile(file, animState.scene);
-      setError(null);
-    } catch (e) {
-      setError("Splat import failed: " + e.message);
-    }
-  }, [animState]);
-
+  // ── Reset ──
   const reset = () => {
-    if (animState?.dispose) animState.dispose();
-    setStage("upload"); setFile(null); setFrames([]); setCameraData(null);
-    setAnimState(null); setError(null); setProgress(0); setShowCode(false);
+    setStage("upload"); setFrames([]); setCameraData(null);
+    setError(null); setProgress(0); setShowCode(false);
     setBriefing({ business: "", style: "", effects: "", creative: "" });
-    setPresetActive(null);
+    setPresetActive(null); setAutoFixes([]); setRefineText(""); setShowRefine(false);
+    setStatusMsg("");
   };
 
+  // ── Briefing input style (orange when preset active) ──
+  const inputStyle = (isTextarea) => ({
+    width: "100%", padding: "12px 14px", borderRadius: 8,
+    background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface,
+    border: `1px solid ${presetActive ? theme.accent : theme.border}`,
+    color: presetActive ? theme.accent : theme.text,
+    fontSize: 13, fontFamily: font, outline: "none", transition: "all 0.3s",
+    ...(isTextarea ? { resize: "vertical" } : {}),
+  });
+
+  // ── Render ──
   return (
     <div style={{ fontFamily: font, background: theme.bg, color: theme.text, minHeight: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Header */}
+      {/* HEADER */}
       <div style={{
-        padding: "16px 24px", borderBottom: `1px solid ${theme.border}`,
+        padding: "12px 24px", borderBottom: `1px solid ${theme.border}`,
         display: "flex", alignItems: "center", justifyContent: "space-between",
         backdropFilter: "blur(12px)", background: "rgba(10,10,12,0.8)",
       }}>
@@ -770,7 +465,7 @@ export default function VideoTo3DAnimator() {
           }}>&#9654;</div>
           <div>
             <div style={{ fontSize: 15, fontWeight: 600 }}>Video to 3D Visual FX</div>
-            <div style={{ fontSize: 11, color: theme.textMuted }}>MP4 → Claude Vision → Three.js Scroll Experience</div>
+            <div style={{ fontSize: 11, color: theme.textMuted }}>MP4 → Claude Opus → Three.js Scroll Experience</div>
           </div>
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -779,14 +474,14 @@ export default function VideoTo3DAnimator() {
           )}
           <a href="https://driveaisales.com" target="_blank" rel="noopener noreferrer" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", opacity: 0.7, transition: "opacity 0.2s" }} onMouseEnter={e => e.currentTarget.style.opacity = 1} onMouseLeave={e => e.currentTarget.style.opacity = 0.7}>
             <span style={{ fontSize: 10, color: theme.textMuted, letterSpacing: "0.05em" }}>Powered by</span>
-            <img src="/driveai-logo.png" alt="Drive AI" style={{ height: 160 }} />
+            <img src="/driveai-logo.png" alt="Drive AI" style={{ height: 40 }} />
           </a>
         </div>
       </div>
 
       <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
 
-        {/* UPLOAD */}
+        {/* ── UPLOAD ── */}
         {stage === "upload" && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32, flexDirection: "column", gap: 24 }}>
             <div style={{ width: "100%", maxWidth: 520 }}>
@@ -801,47 +496,25 @@ export default function VideoTo3DAnimator() {
               <div style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>Drop a video file here</div>
               <div style={{ fontSize: 13, color: theme.textMuted, lineHeight: 1.5 }}>
                 MP4, WebM, MOV<br />
-                24 frames extracted with motion analysis<br />
-                Claude generates scene objects + camera path
+                {FRAME_SAMPLE_COUNT} frames extracted with motion analysis<br />
+                Claude Opus generates scroll-driven Three.js visual FX
               </div>
               <input ref={fileInputRef} type="file" accept="video/*" style={{ display: "none" }} onChange={(e) => handleFile(e.target.files?.[0])} />
-            </div>
-            {/* Import options */}
-            <div style={{ width: "100%", maxWidth: 520, display: "flex", gap: 8, marginTop: 8 }}>
-              <label style={{
-                flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${theme.border}`,
-                background: theme.surface, color: theme.textMuted, fontSize: 11, textAlign: "center",
-                cursor: "pointer", fontFamily: font,
-              }}>
-                Import COLMAP
-                <input type="file" accept=".txt" multiple style={{ display: "none" }}
-                  onChange={(e) => handleColmapImport(Array.from(e.target.files))} />
-              </label>
-              <label style={{
-                flex: 1, padding: "10px", borderRadius: 8, border: `1px solid ${theme.border}`,
-                background: theme.surface, color: theme.textMuted, fontSize: 11, textAlign: "center",
-                cursor: "pointer", fontFamily: font,
-              }}>
-                Import .splat / .ply
-                <input type="file" accept=".splat,.ksplat,.ply" style={{ display: "none" }}
-                  onChange={(e) => { if (e.target.files[0]) handleSplatImport(e.target.files[0]); }} />
-              </label>
             </div>
             {error && <div style={{ color: theme.danger, fontSize: 13 }}>{error}</div>}
           </div>
         )}
 
-        {/* EXTRACTING */}
+        {/* ── EXTRACTING ── */}
         {stage === "extracting" && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
             <div style={{ width: 48, height: 48, border: `3px solid ${theme.border}`, borderTopColor: theme.accent, borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
             <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             <div style={{ fontSize: 15, fontWeight: 500 }}>Extracting frames + analyzing motion...</div>
-            <div style={{ fontSize: 12, color: theme.textMuted }}>Sampling {FRAME_SAMPLE_COUNT} frames with block-matching motion vectors</div>
           </div>
         )}
 
-        {/* PREVIEW */}
+        {/* ── PREVIEW ── */}
         {stage === "preview" && (
           <div style={{ flex: 1, padding: 24, overflow: "auto" }}>
             <div style={{ maxWidth: 900, margin: "0 auto" }}>
@@ -852,39 +525,33 @@ export default function VideoTo3DAnimator() {
                 </span>
               </div>
               <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 16 }}>
-                Motion vectors computed between each frame pair. Claude will use both visual + motion data.
+                Motion vectors computed. Click Continue to describe what you want.
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(160px, 1fr))", gap: 8, marginBottom: 24 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))", gap: 8, marginBottom: 24 }}>
                 {frames.map((f, i) => (
                   <div key={i} style={{ borderRadius: 8, overflow: "hidden", border: `1px solid ${theme.border}`, background: theme.surface }}>
                     <img src={f.dataUrl} alt={`Frame ${i + 1}`} style={{ width: "100%", height: "auto", display: "block" }} />
-                    <div style={{ padding: "6px 8px", fontSize: 10, color: theme.textMuted, fontFamily: "monospace", display: "flex", justifyContent: "space-between" }}>
+                    <div style={{ padding: "4px 8px", fontSize: 10, color: theme.textMuted, fontFamily: "monospace", display: "flex", justifyContent: "space-between" }}>
                       <span>t={f.time.toFixed(1)}s</span>
-                      <span style={{ color: f.motion.magnitude > 1 ? theme.accent : theme.textMuted }}>
-                        motion: {f.motion.magnitude.toFixed(1)}
-                      </span>
+                      <span style={{ color: f.motion.magnitude > 1 ? theme.accent : theme.textMuted }}>m:{f.motion.magnitude.toFixed(1)}</span>
                     </div>
                   </div>
                 ))}
               </div>
 
-              <button onClick={() => { if (!apiKey) { setError("Please enter your Anthropic API key"); return; } setStage("briefing"); }} style={{
+              <button onClick={() => { if (!apiKey) { setError("Enter your API key first"); return; } setStage("briefing"); }} style={{
                 width: "100%", padding: "14px 24px", borderRadius: 10,
                 background: `linear-gradient(135deg, ${theme.accent}, #ff9933)`,
                 border: "none", color: "#000", fontSize: 15, fontWeight: 700,
-                cursor: "pointer", fontFamily: font,
-                boxShadow: `0 4px 24px ${theme.accentGlow}`,
-              }}>
-                Continue to Briefing
-              </button>
-
+                cursor: "pointer", fontFamily: font, boxShadow: `0 4px 24px ${theme.accentGlow}`,
+              }}>Continue to Briefing</button>
               {error && <div style={{ color: theme.danger, fontSize: 13, marginTop: 12, textAlign: "center" }}>{error}</div>}
             </div>
           </div>
         )}
 
-        {/* BRIEFING — 3 questions to dial in the visual experience */}
+        {/* ── BRIEFING ── */}
         {stage === "briefing" && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 32 }}>
             <div style={{ width: "100%", maxWidth: 600 }}>
@@ -898,94 +565,44 @@ export default function VideoTo3DAnimator() {
                   }}>{presetActive.toUpperCase()} LOADED</div>
                 )}
               </div>
-              <style>{`@keyframes fadeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }`}</style>
+              <style>{`@keyframes fadeIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }`}</style>
               <div style={{ fontSize: 12, color: theme.textMuted, marginBottom: 24 }}>
-                Tell us what you want. Type <span style={{ color: theme.accent, fontFamily: "monospace" }}>/driveai</span> in any field to load the Drive AI preset.
+                Type <span style={{ color: theme.accent, fontFamily: "monospace" }}>/driveai</span> in any field to load the Drive AI preset. Or describe your own vision.
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                {/* Q1: Business */}
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
-                    What business is this for? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Include a website URL for color/brand reference</span>
+                    What business is this for? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Include a website URL</span>
                   </label>
-                  <input
-                    value={briefing.business}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const cmd = v.match(/\/(\w+)$/);
-                      if (cmd && PRESETS[cmd[1]]) {
-                        setBriefing({ ...PRESETS[cmd[1]] });
-                        setPresetActive(cmd[1]);
-                        return;
-                      }
-                      setPresetActive(null);
-                      setBriefing(b => ({ ...b, business: v }));
-                    }}
-                    placeholder="e.g. Tesla — electric vehicles — https://tesla.com"
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", transition: "all 0.3s" }}
-                  />
+                  <input value={briefing.business} onChange={(e) => handleBriefingInput(e.target.value, "business", setBriefing, setPresetActive)}
+                    placeholder="e.g. Tesla — electric vehicles — https://tesla.com" style={inputStyle()} />
                 </div>
 
-                {/* Q2: Visual Style */}
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
-                    What visual style and mood? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Colors, atmosphere, feel</span>
+                    Visual style and mood? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Colors, atmosphere, feel</span>
                   </label>
-                  <input
-                    value={briefing.style}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const cmd = v.match(/\/(\w+)$/);
-                      if (cmd && PRESETS[cmd[1]]) {
-                        setBriefing({ ...PRESETS[cmd[1]] });
-                        setPresetActive(cmd[1]);
-                        return;
-                      }
-                      setPresetActive(null);
-                      setBriefing(b => ({ ...b, style: v }));
-                    }}
-                    placeholder="e.g. Dark cinematic, neon blue + purple, futuristic tech feel"
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", transition: "all 0.3s" }}
-                  />
+                  <input value={briefing.style} onChange={(e) => handleBriefingInput(e.target.value, "style", setBriefing, setPresetActive)}
+                    placeholder="e.g. Dark cinematic, neon blue + purple, futuristic tech feel" style={inputStyle()} />
                 </div>
 
-                {/* Q3: Effects */}
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
-                    What specific effects or transitions? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Particles, shapes, morphing, glow</span>
+                    Specific effects or transitions? <span style={{ color: theme.textMuted, fontWeight: 400 }}>Particles, shapes, morphing, glow</span>
                   </label>
-                  <textarea
-                    value={briefing.effects}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      const cmd = v.match(/\/(\w+)$/);
-                      if (cmd && PRESETS[cmd[1]]) {
-                        setBriefing({ ...PRESETS[cmd[1]] });
-                        setPresetActive(cmd[1]);
-                        return;
-                      }
-                      setPresetActive(null);
-                      setBriefing(b => ({ ...b, effects: v }));
-                    }}
-                    placeholder="e.g. Particles forming a car shape, then exploding into sparks, morphing into an engine. Heavy bloom/glow. Camera orbits slowly."
-                    rows={3}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical", transition: "all 0.3s" }}
-                  />
+                  <textarea value={briefing.effects} onChange={(e) => handleBriefingInput(e.target.value, "effects", setBriefing, setPresetActive)}
+                    placeholder="e.g. Particles forming a car, then exploding into sparks, morphing into an engine. Heavy glow."
+                    rows={3} style={inputStyle(true)} />
                 </div>
 
-                {/* Q4: Creative Direction (free-form) */}
                 <div>
                   <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
                     Creative direction <span style={{ color: theme.textMuted, fontWeight: 400 }}>(optional — speak freely)</span>
                   </label>
-                  <textarea
-                    value={briefing.creative}
-                    onChange={(e) => setBriefing(b => ({ ...b, creative: e.target.value }))}
-                    placeholder="e.g. Make it absolutely insane. I want people to feel like they're flying through space. Heavy glow, dramatic camera sweeps, particles should feel alive."
-                    rows={3}
-                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: presetActive ? "rgba(232,122,0,0.06)" : theme.surface, border: `1px solid ${presetActive ? theme.accent : theme.border}`, color: presetActive ? theme.accent : theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical", transition: "all 0.3s" }}
-                  />
+                  <textarea value={briefing.creative} onChange={(e) => handleBriefingInput(e.target.value, "creative", setBriefing, setPresetActive)}
+                    placeholder="e.g. Make it absolutely insane. I want people to feel like they're flying through space."
+                    rows={3} style={inputStyle(true)} />
                 </div>
               </div>
 
@@ -999,28 +616,21 @@ export default function VideoTo3DAnimator() {
                   flex: 1, padding: "14px 24px", borderRadius: 10,
                   background: `linear-gradient(135deg, ${theme.accent}, #ff9933)`,
                   border: "none", color: "#000", fontSize: 15, fontWeight: 700,
-                  cursor: "pointer", fontFamily: font,
-                  boxShadow: `0 4px 24px ${theme.accentGlow}`,
-                }}>
-                  Generate Visual FX
-                </button>
+                  cursor: "pointer", fontFamily: font, boxShadow: `0 4px 24px ${theme.accentGlow}`,
+                }}>Generate Visual FX</button>
               </div>
-
               {error && <div style={{ color: theme.danger, fontSize: 13, marginTop: 12, textAlign: "center" }}>{error}</div>}
             </div>
           </div>
         )}
 
-        {/* ANALYZING */}
+        {/* ── ANALYZING ── */}
         {stage === "analyzing" && (
           <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 20, padding: 32 }}>
             <div style={{ width: 56, height: 56, borderRadius: 14, background: theme.accentGlow, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, animation: "pulse 1.5s ease-in-out infinite" }}>&#129504;</div>
-            <style>{`@keyframes pulse { 0%,100% { opacity: 0.7; transform: scale(1); } 50% { opacity: 1; transform: scale(1.05); } }`}</style>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>Claude is analyzing...</div>
-            <div style={{ fontSize: 12, color: theme.textMuted, textAlign: "center", lineHeight: 1.6 }}>
-              Analyzing {frames.length} frames + motion vectors<br />
-              Generating camera path + scene objects + environment
-            </div>
+            <style>{`@keyframes pulse { 0%,100% { opacity:0.7; transform:scale(1); } 50% { opacity:1; transform:scale(1.05); } }`}</style>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>Claude Opus is creating...</div>
+            <div style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}>{statusMsg}</div>
             <div style={{ width: 320, maxWidth: "100%", height: 4, background: theme.surface, borderRadius: 2, overflow: "hidden" }}>
               <div style={{ height: "100%", width: `${progress}%`, background: `linear-gradient(90deg, ${theme.accent}, #ff9933)`, borderRadius: 2, transition: "width 0.3s" }} />
             </div>
@@ -1028,11 +638,11 @@ export default function VideoTo3DAnimator() {
           </div>
         )}
 
-        {/* PLAYING */}
+        {/* ── PLAYING ── */}
         {stage === "playing" && cameraData && (
           <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
             {/* Tab bar */}
-            <div style={{ padding: "8px 24px", background: theme.surface, borderBottom: `1px solid ${theme.border}`, display: "flex", gap: 8 }}>
+            <div style={{ padding: "8px 16px", background: theme.surface, borderBottom: `1px solid ${theme.border}`, display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
               <button onClick={() => setShowCode(false)} style={{
                 padding: "6px 16px", borderRadius: 6, fontSize: 12, fontFamily: font, cursor: "pointer",
                 background: !showCode ? theme.accent : "transparent",
@@ -1047,11 +657,11 @@ export default function VideoTo3DAnimator() {
                 border: `1px solid ${showCode ? theme.accent : theme.border}`,
                 fontWeight: showCode ? 700 : 400,
               }}>Code</button>
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6 }}>
+              <div style={{ marginLeft: "auto", display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button onClick={() => {
                   navigator.clipboard.writeText(cameraData).then(() => {
                     const b = document.getElementById("cpBtn");
-                    if(b){b.textContent="Copied!";setTimeout(()=>{b.textContent="Copy Code"},2000)}
+                    if (b) { b.textContent = "Copied!"; setTimeout(() => { b.textContent = "Copy Code"; }, 2000); }
                   });
                 }} id="cpBtn" style={{
                   background: theme.surface, border: `1px solid ${theme.border}`,
@@ -1062,40 +672,46 @@ export default function VideoTo3DAnimator() {
                   const blob = new Blob([cameraData], { type: "text/html" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a"); a.href = url;
-                  a.download = "threejs-scroll-design.html"; a.click();
+                  a.download = "threejs-visual-fx.html"; a.click();
                   URL.revokeObjectURL(url);
                 }} style={{
-                  background: theme.accent, border: "none",
-                  color: "#000", padding: "6px 14px", borderRadius: 6,
-                  cursor: "pointer", fontSize: 11, fontWeight: 700, fontFamily: font,
+                  background: theme.accent, border: "none", color: "#000",
+                  padding: "6px 14px", borderRadius: 6, cursor: "pointer",
+                  fontSize: 11, fontWeight: 700, fontFamily: font,
                 }}>Download HTML</button>
-                <button onClick={async () => {
-                  const issue = prompt("Describe what needs to be fixed:");
-                  if (!issue || !apiKey) return;
-                  setStage("analyzing");
-                  setProgress(0);
-                  const pt = setInterval(() => setProgress(p => Math.min(p + Math.random() * 8, 92)), 500);
-                  try {
-                    const rawFixed = await refineCode(cameraData, issue, apiKey);
-                    const { html: validatedFixed } = validateAndFixCode(rawFixed);
-                    clearInterval(pt);
-                    setProgress(100);
-                    setCameraData(validatedFixed);
-                    setTimeout(() => setStage("playing"), 300);
-                  } catch (e) {
-                    clearInterval(pt);
-                    setError("Refinement failed: " + e.message);
-                    setStage("playing");
-                  }
-                }} style={{
-                  background: "transparent", border: `1px solid ${theme.border}`,
-                  color: theme.textMuted, padding: "6px 14px", borderRadius: 6,
-                  cursor: "pointer", fontSize: 11, fontFamily: font,
+                <button onClick={() => setShowRefine(!showRefine)} style={{
+                  background: showRefine ? theme.accent : "transparent",
+                  border: `1px solid ${showRefine ? theme.accent : theme.border}`,
+                  color: showRefine ? "#000" : theme.textMuted,
+                  padding: "6px 14px", borderRadius: 6, cursor: "pointer",
+                  fontSize: 11, fontFamily: font, fontWeight: showRefine ? 700 : 400,
                 }}>Refine</button>
               </div>
             </div>
+
+            {/* Refine panel (inline, not window.prompt) */}
+            {showRefine && (
+              <div style={{ padding: "12px 16px", background: theme.surface, borderBottom: `1px solid ${theme.border}`, display: "flex", gap: 8, alignItems: "flex-end" }}>
+                <textarea value={refineText} onChange={(e) => setRefineText(e.target.value)}
+                  placeholder="Describe what needs fixing... e.g. 'particles are too spread out, make the transitions smoother, add more glow'"
+                  rows={2} style={{
+                    flex: 1, padding: "10px 12px", borderRadius: 8, background: theme.bg,
+                    border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13,
+                    fontFamily: font, outline: "none", resize: "none",
+                  }} />
+                <button onClick={handleRefine} disabled={!refineText.trim()} style={{
+                  padding: "10px 20px", borderRadius: 8,
+                  background: refineText.trim() ? `linear-gradient(135deg, ${theme.accent}, #ff9933)` : theme.surface,
+                  border: "none", color: refineText.trim() ? "#000" : theme.textMuted,
+                  fontSize: 12, fontWeight: 700, cursor: refineText.trim() ? "pointer" : "default",
+                  fontFamily: font, whiteSpace: "nowrap",
+                }}>Send to Claude</button>
+              </div>
+            )}
+
+            {/* Auto-fixes banner */}
             {autoFixes.length > 0 && (
-              <div style={{ padding: "4px 24px", background: "rgba(45,212,160,.06)", borderBottom: `1px solid rgba(45,212,160,.1)`, fontSize: 11, color: "#2dd4a0", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <div style={{ padding: "4px 16px", background: "rgba(45,212,160,.06)", borderBottom: `1px solid rgba(45,212,160,.1)`, fontSize: 11, color: "#2dd4a0", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <span style={{ fontWeight: 600 }}>Auto-fixed {autoFixes.length} issues:</span>
                 {autoFixes.map((f, i) => <span key={i} style={{ opacity: .7 }}>{f}{i < autoFixes.length - 1 ? " | " : ""}</span>)}
               </div>
@@ -1104,12 +720,8 @@ export default function VideoTo3DAnimator() {
             {/* Preview or Code */}
             {!showCode ? (
               <div style={{ flex: 1, position: "relative" }}>
-                <iframe
-                  srcDoc={cameraData}
-                  style={{ width: "100%", height: "100%", border: "none", minHeight: 500 }}
-                  sandbox="allow-scripts"
-                  title="Preview"
-                />
+                <iframe srcDoc={cameraData} style={{ width: "100%", height: "100%", border: "none", minHeight: 500 }}
+                  sandbox="allow-scripts" title="Preview" />
                 <div style={{
                   position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,.7)",
                   padding: "4px 10px", borderRadius: 4, fontSize: 10, color: theme.textMuted,
@@ -1125,6 +737,11 @@ export default function VideoTo3DAnimator() {
               </div>
             )}
           </div>
+        )}
+
+        {/* Error display for playing stage */}
+        {stage === "playing" && error && (
+          <div style={{ padding: "8px 16px", background: "rgba(255,68,68,.1)", color: theme.danger, fontSize: 12, textAlign: "center" }}>{error}</div>
         )}
       </div>
     </div>

@@ -153,11 +153,5 @@ window.addEventListener('resize', function() {
 });
 `;
 
-export const GSAP_SCROLLTRIGGER_SKILLS = `
-## GSAP ScrollTrigger (optional)
-gsap.registerPlugin(ScrollTrigger);
-gsap.to('.target', {
-  scrollTrigger: { trigger: '.target', start: 'top center', end: 'bottom center', scrub: true },
-  x: 500
-});
-`;
+// GSAP removed — conflicts with sandbox="allow-scripts" iframe preview
+// All scroll animation is done with vanilla JS scroll listener

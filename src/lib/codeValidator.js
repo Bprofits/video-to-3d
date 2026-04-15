@@ -166,6 +166,56 @@ export function validateAndFixCode(html) {
     });
   }
 
+  // ──────────────────────────────────────────────
+  // 10. Verify animate() is called (most common black screen cause)
+  // ──────────────────────────────────────────────
+  if (fixed.includes('requestAnimationFrame')) {
+    // Check the animate function is actually invoked at the end
+    const hasAnimateCall = /\banimate\s*\(\s*\)\s*;/.test(fixed);
+    const hasRenderCall = /renderer\.render\s*\(/.test(fixed);
+    if (!hasAnimateCall) {
+      // Inject animate() call before </script>
+      fixed = fixed.replace(/<\/script>/i, '\nanimate();\n<\/script>');
+      fixes.push('Added missing animate() call');
+    }
+    if (!hasRenderCall) {
+      fixes.push('WARNING: No renderer.render() found — scene will be blank');
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // 11. Verify scene has at least one light (black mesh fix)
+  // ──────────────────────────────────────────────
+  if (fixed.includes('MeshStandardMaterial') || fixed.includes('MeshPhongMaterial') || fixed.includes('MeshLambertMaterial')) {
+    const hasLight = /new THREE\.(AmbientLight|DirectionalLight|PointLight|SpotLight|HemisphereLight)/.test(fixed);
+    if (!hasLight) {
+      fixed = fixed.replace(
+        /scene\.add\(\s*new THREE\.Mesh/,
+        'scene.add(new THREE.AmbientLight(0xffffff, 0.5));\nscene.add(new THREE.DirectionalLight(0xffffff, 1));\nscene.add(new THREE.Mesh'
+      );
+      fixes.push('Added missing lights (meshes need light to be visible)');
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // 12. Detect deprecated THREE.Geometry / THREE.Face3 (removed in r125+)
+  // ──────────────────────────────────────────────
+  if (fixed.includes('new THREE.Geometry(') || fixed.includes('new THREE.Face3(')) {
+    fixes.push('WARNING: Deprecated THREE.Geometry/Face3 detected — use BufferGeometry instead');
+  }
+
+  // ──────────────────────────────────────────────
+  // 13. Detect new THREE.* allocation inside animation loops
+  // ──────────────────────────────────────────────
+  const animLoopMatch = fixed.match(/function\s+animate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s*\}/);
+  if (animLoopMatch) {
+    const loopBody = animLoopMatch[1];
+    const allocInLoop = loopBody.match(/new THREE\.(Vector[234]|Matrix[34]|Color|Euler|Quaternion|Box[23]|Sphere|Ray|Plane|BufferGeometry|[A-Z]\w*Geometry|[A-Z]\w*Material)\(/g);
+    if (allocInLoop) {
+      fixes.push(`WARNING: ${allocInLoop.length} THREE object allocation(s) inside animate loop — causes GC pressure`);
+    }
+  }
+
   return { html: fixed, fixes };
 }
 
