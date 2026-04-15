@@ -331,17 +331,21 @@ REQUIREMENTS:
 6. Camera follows the described movements, tied to scroll position
 7. Use ONLY vanilla Three.js from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
 8. Single HTML file, inline CSS and JS, works on file:// protocol
-9. MAXIMUM visual impact — this must look STUNNING:
-   - Use 15000+ particles minimum
-   - Create a CanvasTexture with radial gradient for soft glowing particle sprites (64x64 canvas)
-   - Multiple colored spotlights that orbit the scene
+9. PREMIUM VISUAL QUALITY (this must rival award-winning Three.js sites like igloo.inc):
+   - 15000+ particles with CanvasTexture radial gradient sprite (64x64, warm glow falloff)
+   - 3-point lighting rig: key light + colored fill light + rim light + ambient
+   - Orbiting colored spotlights (sin/cos position in animate loop)
    - Reflective floor (PlaneGeometry + MeshStandardMaterial metalness:0.95 roughness:0.05)
-   - FogExp2 for depth atmosphere
-   - Smooth easeInOutCubic transitions between shapes
-   - Dynamic light intensity pulsing with Math.sin
-   - Particle system slow rotation (particleSystem.rotation.y = elapsed * 0.05)
+   - FogExp2(0x000000, 0.015) for depth atmosphere
+   - easeInOutCubic on ALL morph transitions (never linear lerp)
+   - Dynamic light intensity pulsing: base + Math.sin(elapsed * 2) * 0.3
+   - Slow particle system rotation: particleSystem.rotation.y = elapsed * 0.03
+   - Ambient background particles (2000 tiny white dots in large volume, separate Points object)
+   - Wireframe IcosahedronGeometry accent rotating slowly (opacity 0.15)
+   - CatmullRomCurve3 tube trails as flowing ribbon accents
    - Use 800vh scroll spacer for smooth pacing
 10. Each morph transition block should use its OWN block-scoped const t — this is valid JavaScript
+11. Add visual polish: scroll velocity affects particle spread, color cycling based on elapsed time
 
 HTML STRUCTURE (simple):
 <body style="margin:0;overflow-x:hidden;background:#000">
