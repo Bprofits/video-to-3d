@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { THREEJS_SKILLS } from "./lib/skills";
 // GSAP skills removed — conflicts with sandbox iframe
 import { validateAndFixCode } from "./lib/codeValidator";
@@ -319,6 +319,33 @@ Return the COMPLETE fixed HTML starting with <!DOCTYPE html>.`
 }
 
 // -----------------------------------------------
+// HELPER: inject error catching + scroll forwarding into generated HTML
+// -----------------------------------------------
+function injectIframeBridge(html) {
+  const bridgeScript = `<script>
+// Error catching — sends errors to parent window
+window.onerror = function(msg, url, line, col, err) {
+  parent.postMessage({ type: "threejs-error", message: msg + " (line " + line + ")" }, "*");
+  return false;
+};
+window.addEventListener("unhandledrejection", function(e) {
+  parent.postMessage({ type: "threejs-error", message: "Promise: " + (e.reason?.message || e.reason) }, "*");
+});
+// Scroll forwarding — receives wheel events from parent
+window.addEventListener("message", function(e) {
+  if (e.data && e.data.type === "scroll-forward") {
+    window.scrollBy(0, e.data.deltaY);
+  }
+});
+<\/script>`;
+  // Inject right after <body> or before first <script>
+  if (html.includes("<body")) {
+    return html.replace(/(<body[^>]*>)/i, "$1\n" + bridgeScript);
+  }
+  return html.replace(/<script/i, bridgeScript + "\n<script");
+}
+
+// -----------------------------------------------
 // HELPER: detect /command in briefing input
 // -----------------------------------------------
 function handleBriefingInput(value, field, setBriefing, setPresetActive) {
@@ -350,8 +377,42 @@ export default function VideoTo3DAnimator() {
   const [presetActive, setPresetActive] = useState(null);
   const [refineText, setRefineText] = useState("");
   const [showRefine, setShowRefine] = useState(false);
+  const [iframeErrors, setIframeErrors] = useState([]);
+  const [history, setHistory] = useState([]);     // previous generations
+  const [historyIdx, setHistoryIdx] = useState(-1); // -1 = current (latest)
 
   const fileInputRef = useRef(null);
+  const iframeRef = useRef(null);
+
+  // ── Listen for error messages from the iframe ──
+  useEffect(() => {
+    const handler = (e) => {
+      if (e.data && e.data.type === "threejs-error") {
+        setIframeErrors(prev => {
+          const msg = e.data.message;
+          if (prev.includes(msg)) return prev;
+          return [...prev.slice(-4), msg]; // keep last 5
+        });
+      }
+    };
+    window.addEventListener("message", handler);
+    return () => window.removeEventListener("message", handler);
+  }, []);
+
+  // ── Forward scroll events into iframe ──
+  useEffect(() => {
+    if (stage !== "playing" || showCode || !iframeRef.current) return;
+    const iframe = iframeRef.current;
+    const handler = (e) => {
+      if (iframe.contentWindow) {
+        iframe.contentWindow.postMessage({ type: "scroll-forward", deltaY: e.deltaY }, "*");
+      }
+    };
+    // Attach to the iframe's parent container
+    const container = iframe.parentElement;
+    if (container) container.addEventListener("wheel", handler, { passive: true });
+    return () => { if (container) container.removeEventListener("wheel", handler); };
+  }, [stage, showCode]);
 
   // ── File handling ──
   const handleFile = useCallback(async (f) => {
@@ -395,8 +456,12 @@ export default function VideoTo3DAnimator() {
       });
       clearInterval(progressTimer);
       setProgress(100);
-      setCameraData(result.html);
+      const injected = injectIframeBridge(result.html);
+      setCameraData(injected);
       setAutoFixes(result.fixes || []);
+      setIframeErrors([]);
+      setHistory([]);
+      setHistoryIdx(-1);
       setTimeout(() => setStage("playing"), 300);
     } catch (e) {
       clearInterval(progressTimer);
@@ -417,7 +482,12 @@ export default function VideoTo3DAnimator() {
       const { html: validated } = validateAndFixCode(rawFixed);
       clearInterval(pt);
       setProgress(100);
-      setCameraData(validated);
+      // Save current version to history before replacing
+      setHistory(prev => [...prev.slice(-4), cameraData]); // keep last 5
+      const injected = injectIframeBridge(validated);
+      setCameraData(injected);
+      setHistoryIdx(-1);
+      setIframeErrors([]);
       setRefineText("");
       setShowRefine(false);
       setTimeout(() => setStage("playing"), 300);
@@ -434,7 +504,7 @@ export default function VideoTo3DAnimator() {
     setError(null); setProgress(0); setShowCode(false);
     setBriefing({ business: "", style: "", effects: "", creative: "" });
     setPresetActive(null); setAutoFixes([]); setRefineText(""); setShowRefine(false);
-    setStatusMsg("");
+    setStatusMsg(""); setIframeErrors([]); setHistory([]); setHistoryIdx(-1);
   };
 
   // ── Briefing input style (orange when preset active) ──
@@ -686,6 +756,45 @@ export default function VideoTo3DAnimator() {
                   padding: "6px 14px", borderRadius: 6, cursor: "pointer",
                   fontSize: 11, fontFamily: font, fontWeight: showRefine ? 700 : 400,
                 }}>Refine</button>
+                {history.length > 0 && (
+                  <>
+                    <button onClick={() => {
+                      if (historyIdx === -1) {
+                        // Currently on latest — go back to previous
+                        setHistoryIdx(history.length - 1);
+                        setCameraData(history[history.length - 1]);
+                      } else if (historyIdx > 0) {
+                        setHistoryIdx(historyIdx - 1);
+                        setCameraData(history[historyIdx - 1]);
+                      }
+                      setIframeErrors([]);
+                    }} disabled={historyIdx === 0} style={{
+                      background: "transparent", border: `1px solid ${theme.border}`,
+                      color: historyIdx === 0 ? theme.border : theme.textMuted,
+                      padding: "6px 10px", borderRadius: 6, cursor: historyIdx === 0 ? "default" : "pointer",
+                      fontSize: 11, fontFamily: font,
+                    }} title="Previous version">&#9664;</button>
+                    <button onClick={() => {
+                      if (historyIdx >= 0 && historyIdx < history.length - 1) {
+                        setHistoryIdx(historyIdx + 1);
+                        setCameraData(history[historyIdx + 1]);
+                      } else if (historyIdx === history.length - 1) {
+                        setHistoryIdx(-1);
+                        // Restore to latest (which was saved when refine happened)
+                        // The latest is the current refined version — need to track it
+                      }
+                      setIframeErrors([]);
+                    }} disabled={historyIdx === -1} style={{
+                      background: "transparent", border: `1px solid ${theme.border}`,
+                      color: historyIdx === -1 ? theme.border : theme.textMuted,
+                      padding: "6px 10px", borderRadius: 6, cursor: historyIdx === -1 ? "default" : "pointer",
+                      fontSize: 11, fontFamily: font,
+                    }} title="Next version">&#9654;</button>
+                    <span style={{ fontSize: 10, color: theme.textMuted, alignSelf: "center" }}>
+                      {historyIdx === -1 ? "Latest" : `v${historyIdx + 1}/${history.length}`}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
 
@@ -717,15 +826,24 @@ export default function VideoTo3DAnimator() {
               </div>
             )}
 
+            {/* Iframe errors */}
+            {iframeErrors.length > 0 && (
+              <div style={{ padding: "6px 16px", background: "rgba(255,68,68,.08)", borderBottom: `1px solid rgba(255,68,68,.15)`, fontSize: 11, color: theme.danger }}>
+                <span style={{ fontWeight: 600 }}>Runtime errors ({iframeErrors.length}): </span>
+                {iframeErrors.map((e, i) => <span key={i} style={{ opacity: 0.8 }}>{e}{i < iframeErrors.length - 1 ? " | " : ""}</span>)}
+                <button onClick={() => setIframeErrors([])} style={{ marginLeft: 8, background: "none", border: "none", color: theme.danger, cursor: "pointer", fontSize: 10, textDecoration: "underline" }}>dismiss</button>
+              </div>
+            )}
+
             {/* Preview or Code */}
             {!showCode ? (
               <div style={{ flex: 1, position: "relative" }}>
-                <iframe srcDoc={cameraData} style={{ width: "100%", height: "100%", border: "none", minHeight: 500 }}
+                <iframe ref={iframeRef} srcDoc={cameraData} style={{ width: "100%", height: "100%", border: "none", minHeight: 500 }}
                   sandbox="allow-scripts" title="Preview" />
                 <div style={{
                   position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,.7)",
                   padding: "4px 10px", borderRadius: 4, fontSize: 10, color: theme.textMuted,
-                }}>Scroll inside the preview to see the animation</div>
+                }}>Scroll over preview to navigate the animation</div>
               </div>
             ) : (
               <div style={{ flex: 1, overflow: "auto", padding: 16, background: "#0d0d12" }}>
