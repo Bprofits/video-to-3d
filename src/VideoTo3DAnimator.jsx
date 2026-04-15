@@ -186,13 +186,14 @@ const PRESETS = {
     business: "Drive AI Sales Inc. — AI-powered automation for car dealerships. Website: https://driveaisales.com",
     style: "Dark cinematic with orange (#E87A00) and black (#070707) brand colors, cream (#F4DEC9) accents. Premium automotive tech feel — holographic, futuristic, high-end.",
     effects: "Particle morphing between shapes (DNA helix, engine, drivetrain, neural network). Scatter transitions, additive blending glow, reflective floor, fog. Camera orbits and dollies. Intense visual journey.",
+    creative: "Make it feel like a premium luxury tech experience. The kind of visual that makes someone stop scrolling and say 'holy shit'. Dramatic camera sweeps, particles that feel alive, pulsing energy.",
   },
 };
 
 // -----------------------------------------------
-// TWO-STAGE ANALYSIS PIPELINE
-// Stage 1: Video + briefing → structured scene spec (JSON)
-// Stage 2: Scene spec + skills → complete HTML (pure visual FX, no text)
+// SINGLE-STAGE PIPELINE
+// Everything in one Opus call: frames + briefing + skills → complete HTML
+// No telephone game — Claude sees the actual video AND the creative direction
 // -----------------------------------------------
 
 async function callClaude(apiKey, messages, maxTokens, system) {
@@ -218,158 +219,96 @@ async function callClaude(apiKey, messages, maxTokens, system) {
   return data.content?.map((c) => c.text || "").join("") || "";
 }
 
-// STAGE 1: Analyze video frames + briefing → structured scene specification
-async function analyzeVideoToSpec(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
+// SINGLE STAGE: Video frames + briefing + skills → complete HTML
+async function generateFromVideo(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
   const motionSummary = frames.map((f, i) =>
     `Frame ${i + 1} (t=${f.time.toFixed(1)}s): motion=${f.motion.magnitude.toFixed(2)} brightness=${f.brightness.toFixed(2)}`
   ).join("\n");
 
+  // Build image blocks — Claude sees every frame
   const imageBlocks = frames.map((f, i) => [
     { type: "image", source: { type: "base64", media_type: "image/jpeg", data: f.base64 } },
     { type: "text", text: `Frame ${i + 1} at t=${f.time.toFixed(1)}s` },
   ]).flat();
 
-  onProgress && onProgress("Analyzing video scenes...");
+  onProgress && onProgress("Analyzing video + generating Three.js visual FX...");
 
-  const specText = await callClaude(apiKey, [{
+  const rawHTML = await callClaude(apiKey, [{
     role: "user",
     content: [
       ...imageBlocks,
       {
         type: "text",
-        text: `You are a visual effects director analyzing ${frames.length} frames from a ${duration.toFixed(1)}s video (${videoWidth}x${videoHeight}).
+        text: `You are a world-class Three.js visual effects developer. Study the ${frames.length} frames above from a ${duration.toFixed(1)}s video (${videoWidth}x${videoHeight}).
 
-Motion data: ${motionSummary}
+MOTION ANALYSIS:
+${motionSummary}
 
 USER BRIEFING:
-- Business/Context: ${briefing.business || "Not specified"}
-- Visual Style: ${briefing.style || "Match the video's aesthetic"}
-- Desired Effects: ${briefing.effects || "Match the video's effects and transitions"}
+- Business/Context: ${briefing.business || "Not specified — use your best judgment from the video"}
+- Visual Style: ${briefing.style || "Match the video's aesthetic — study the colors, mood, lighting"}
+- Desired Effects: ${briefing.effects || "Recreate the visual experience from the video with premium Three.js effects"}
+${briefing.creative ? `- Creative Direction: ${briefing.creative}` : ""}
 
-Produce a detailed SCENE SPECIFICATION as JSON. Study each frame carefully. This is for a PURE VISUAL EFFECTS experience — NO text overlays, NO web design, NO typography. Just raw Three.js visual spectacle.
-
-{
-  "title": "descriptive title for the visual experience",
-  "mood": "dark cinematic | bright minimal | neon tech | organic nature | etc",
-  "color_palette": {
-    "background": "#hex",
-    "primary": "#hex",
-    "secondary": "#hex",
-    "accent": "#hex",
-    "glow": "#hex"
-  },
-  "scenes": [
-    {
-      "id": 1,
-      "start_time": 0.0,
-      "end_time": 3.5,
-      "description": "detailed description of the visual effect",
-      "visual_elements": ["particles forming a shape", "orange glow", "reflective floor"],
-      "dominant_colors": ["#E87A00", "#112240"],
-      "threejs_technique": "particles | geometry | shader | combination",
-      "camera": {
-        "start_position": [x, y, z],
-        "end_position": [x, y, z],
-        "movement": "orbit | dolly | static | crane | tracking"
-      },
-      "transition_to_next": "dissolve | scatter | morph | cut | fade"
-    }
-  ],
-  "global_effects": ["bloom", "particles", "fog", "scan lines", "etc"],
-  "scroll_structure": {
-    "total_sections": 6,
-    "section_heights_vh": [100, 150, 100, 150, 100, 100]
-  }
-}
-
-Be extremely detailed about the visual elements. Describe exactly what shapes, colors, effects, and movements should create a visually immersive scroll-driven experience. NO text overlays — pure visual FX only.
-
-Respond with ONLY valid JSON. No markdown fences.`
-      }
-    ]
-  }], 8000);
-
-  let spec;
-  try {
-    const clean = specText.replace(/```json|```/g, "").trim();
-    spec = JSON.parse(clean);
-  } catch (e) {
-    throw new Error("Failed to parse scene spec: " + e.message);
-  }
-
-  return spec;
-}
-
-// STAGE 2: Scene spec + skills → complete HTML (PURE VISUAL FX — no text)
-async function generateCodeFromSpec(spec, briefing, apiKey, onProgress) {
-  onProgress && onProgress("Generating Three.js visual effects...");
-
-  const rawHTML = await callClaude(apiKey, [{
-    role: "user",
-    content: `You are an expert Three.js visual effects developer. Generate a COMPLETE, production-quality, single-file HTML page that creates a PURE VISUAL EXPERIENCE based on this scene specification:
-
-${JSON.stringify(spec, null, 2)}
-
-${briefing.business ? `BUSINESS CONTEXT: ${briefing.business}` : ""}
-${briefing.style ? `VISUAL STYLE: ${briefing.style}` : ""}
-${briefing.effects ? `DESIRED EFFECTS: ${briefing.effects}` : ""}
+YOUR TASK: Generate a COMPLETE, production-quality, single-file HTML page that recreates the visual experience from this video as a scroll-driven Three.js visual FX masterpiece.
 
 THIS IS A PURE VISUAL FX PAGE — NO TEXT, NO HEADINGS, NO PARAGRAPHS, NO WEB DESIGN.
 The ENTIRE page is just the Three.js canvas filling the screen with scroll-driven visual effects.
-Think of it as a visual trip — particles morphing, shapes forming, cameras sweeping, colors shifting.
+Think of it as a visual journey — particles morphing, shapes forming, cameras sweeping, colors shifting, lights dancing.
+
+Study the video frames carefully. Extract:
+- The color palette (exact hex colors from the dominant tones)
+- The shapes and objects visible (recreate as particle formations)
+- The camera movements (orbits, dollies, crane shots)
+- The transitions between scenes (morphs, scatters, fades)
+- The mood and atmosphere (dark, bright, neon, cinematic)
 
 REQUIREMENTS:
-1. Scroll-driven — scrolling progresses through the visual experience
-2. FULLSCREEN Three.js canvas — NO HTML text overlays, NO sections with text, NO typography
-3. The scroll-spacer div should be invisible — just provides scroll height for the visual journey
-4. Recreate EVERY visual element described in the spec:
-   - Particles: BufferGeometry + Float32Array + PointsMaterial with CanvasTexture sprites
-   - Shapes: custom geometry built from mathematical functions
-   - Glow: AdditiveBlending, emissive colors, sprite halos
-   - Transitions: lerp particle positions between shapes, scatter/reform effects
-5. Match the EXACT color palette from the spec
-6. Camera follows the described movements, tied to scroll position
-7. Use ONLY vanilla Three.js from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
-8. Single HTML file, inline CSS and JS, works on file:// protocol
-9. PREMIUM VISUAL QUALITY (this must rival award-winning Three.js sites like igloo.inc):
-   - 15000+ particles with CanvasTexture radial gradient sprite (64x64, warm glow falloff)
-   - 3-point lighting rig: key light + colored fill light + rim light + ambient
-   - Orbiting colored spotlights (sin/cos position in animate loop)
-   - Reflective floor (PlaneGeometry + MeshStandardMaterial metalness:0.95 roughness:0.05)
-   - FogExp2(0x000000, 0.015) for depth atmosphere
-   - easeInOutCubic on ALL morph transitions (never linear lerp)
-   - Dynamic light intensity pulsing: base + Math.sin(elapsed * 2) * 0.3
-   - Slow particle system rotation: particleSystem.rotation.y = elapsed * 0.03
-   - Ambient background particles (2000 tiny white dots in large volume, separate Points object)
-   - Wireframe IcosahedronGeometry accent rotating slowly (opacity 0.15)
-   - CatmullRomCurve3 tube trails as flowing ribbon accents
-   - Use 800vh scroll spacer for smooth pacing
-10. Each morph transition block should use its OWN block-scoped const t — this is valid JavaScript
-11. Add visual polish: scroll velocity affects particle spread, color cycling based on elapsed time
+1. Scroll-driven — scrolling progresses through the visual experience (800vh scroll spacer)
+2. FULLSCREEN Three.js canvas — NO HTML text, NO sections, NO typography whatsoever
+3. Use ONLY vanilla Three.js from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+4. Single HTML file, inline CSS and JS, works on file:// protocol
 
-HTML STRUCTURE (simple):
-<body style="margin:0;overflow-x:hidden;background:#000">
-  <canvas id="bg" style="position:fixed;top:0;left:0;width:100%;height:100%"></canvas>
-  <div style="height:800vh"></div>  <!-- scroll spacer -->
-</body>
+PREMIUM VISUAL QUALITY (this must rival award-winning Three.js sites like igloo.inc):
+- 15000+ particles with CanvasTexture radial gradient sprite (64x64 canvas, warm glow falloff)
+- 3-point lighting rig: key DirectionalLight + colored fill light + rim light + AmbientLight
+- 2 orbiting colored SpotLights (position updated with sin/cos in animate loop)
+- Reflective floor: PlaneGeometry(100,100) + MeshStandardMaterial({ color:0x111111, metalness:0.95, roughness:0.05 })
+- FogExp2(backgroundColor, 0.015) for depth atmosphere
+- easeInOutCubic on ALL morph transitions — NEVER use linear lerp for shape morphing
+- Dynamic light intensity pulsing: light.intensity = base + Math.sin(elapsed * 2) * 0.3
+- Slow particle system rotation: particleSystem.rotation.y = elapsed * 0.03
+- Ambient background dust: second Points object with 2000 tiny white particles in large volume
+- Wireframe IcosahedronGeometry(2,2) accent, opacity 0.15, slowly rotating
+- CatmullRomCurve3 tube trail ribbons as accent geometry
+- Mouse parallax on camera group: track mouse position, lerp camera group offset
 
-SCROLL ANIMATION PATTERNS:
-- Use window scroll event listener with passive:true
-- Map scrollTop / (scrollHeight - innerHeight) to 0-1 progress
-- Use scroll progress to drive camera position, particle morphing, lighting changes
-- Lerp all values for smooth interpolation
+SHAPE MORPHING PATTERN:
+- Store each shape as a separate Float32Array (shape1, shape2, shape3, etc.)
+- In the animation loop, use scroll progress to determine which shapes to morph between
+- Each transition uses block-scoped const t with easeInOutCubic — this is valid JS:
+  if (progress < 0.3) { const t = easeInOutCubic(progress / 0.3); /* morph A→B */ }
+  else if (progress < 0.6) { const t = easeInOutCubic((progress-0.3) / 0.3); /* morph B→C */ }
 
-VARIABLE NAMING RULES (CRITICAL):
-- NEVER declare two variables with the same name (e.g. 'colors' for palette AND 'colors' for Float32Array)
-- Use UNIQUE descriptive names: 'palette', 'particleColors', 'vertexPositions'
-- Every variable referenced in updateScene/animate MUST be declared in setup code
-- NEVER allocate new THREE.Vector3/Color inside animation loops — pre-allocate and reuse with .set()
-- If you use 'const i3 = i * 3' in init, use the SAME 'const i3 = i * 3' in animation loops
+HTML STRUCTURE (use exactly this):
+body tag: style="margin:0;overflow-x:hidden;background:#000"
+  canvas tag: id="bg" style="position:fixed;top:0;left:0;width:100%;height:100%"
+  div tag: style="height:800vh" (scroll spacer, nothing else)
 
-Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>. No explanations, no markdown. Just the code.`
+VARIABLE NAMING RULES (CRITICAL — violations cause runtime crashes):
+- NEVER declare two variables with the same name at the script's top level
+- Use UNIQUE descriptive names: 'palette' not 'colors', 'particleColors' not 'colors'
+- Every variable referenced in updateScene/animate MUST be declared in accessible scope
+- NEVER allocate new THREE.Vector3/Color inside animation loops — pre-allocate and reuse
+- const/let inside separate if/else blocks are block-scoped and FINE to reuse names
+
+Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>.
+No explanations, no markdown fences, no preamble. JUST the code.`
+      }
+    ]
   }], 32000,
-  // System prompt with skills
-  `You are a Three.js expert. You write production-quality WebGL code. You know these best practices:\n${THREEJS_SKILLS}\n${GSAP_SCROLLTRIGGER_SKILLS}`
+  // System prompt with full skills reference
+  `You are a world-class Three.js visual effects developer. You create award-winning scroll-driven visual experiences. You know these techniques:\n\n${THREEJS_SKILLS}\n\n${GSAP_SCROLLTRIGGER_SKILLS}`
   );
 
   let html = rawHTML.replace(/```html|```/g, "").trim();
@@ -382,7 +321,7 @@ Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>. No explan
   return html;
 }
 
-// STAGE 3 (optional): Refinement - screenshot preview, ask Claude to fix issues
+// REFINEMENT: Fix issues with existing code
 async function refineCode(currentHTML, issueDescription, apiKey) {
   const refined = await callClaude(apiKey, [
     {
@@ -396,7 +335,7 @@ ${currentHTML}
 
 Fix the issues while keeping the overall structure. This is PURE VISUAL FX — do NOT add any text, headings, or HTML overlays. Return the COMPLETE fixed HTML file. No explanations, just the code starting with <!DOCTYPE html>.`
     }
-  ], 20000,
+  ], 32000,
   `You are a Three.js expert fixing code issues. Apply these best practices:\n${THREEJS_SKILLS}`
   );
 
@@ -406,22 +345,19 @@ Fix the issues while keeping the overall structure. This is PURE VISUAL FX — d
   return html;
 }
 
-// Combined pipeline
+// Main pipeline — single stage + auto-fix
 async function analyzeFramesWithClaude(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
-  // Stage 1: Video + Briefing → Spec
-  const spec = await analyzeVideoToSpec(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress);
+  // Single stage: Video + Briefing + Skills → Complete HTML
+  const html = await generateFromVideo(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress);
 
-  // Stage 2: Spec + Briefing → Code (pure visual FX)
-  const html = await generateCodeFromSpec(spec, briefing, apiKey, onProgress);
-
-  // Stage 3: Auto-fix common code issues
+  // Auto-fix common code issues
   onProgress && onProgress("Validating and fixing code...");
   const { html: fixedHTML, fixes } = validateAndFixCode(html);
   if (fixes.length > 0) {
     console.log("Auto-fixes applied:", fixes);
   }
 
-  return { html: fixedHTML, spec, fixes };
+  return { html: fixedHTML, fixes };
 }
 
 // -----------------------------------------------
@@ -663,7 +599,7 @@ export default function VideoTo3DAnimator() {
   const [apiKey, setApiKey] = useState(localStorage.getItem("anthropic_api_key") || "");
   const [showCode, setShowCode] = useState(false);
   const [autoFixes, setAutoFixes] = useState([]);
-  const [briefing, setBriefing] = useState({ business: "", style: "", effects: "" });
+  const [briefing, setBriefing] = useState({ business: "", style: "", effects: "", creative: "" });
 
   const threeContainer = useRef(null);
   const videoPreviewRef = useRef(null);
@@ -788,7 +724,7 @@ export default function VideoTo3DAnimator() {
     if (animState?.dispose) animState.dispose();
     setStage("upload"); setFile(null); setFrames([]); setCameraData(null);
     setAnimState(null); setError(null); setProgress(0); setShowCode(false);
-    setBriefing({ business: "", style: "", effects: "" });
+    setBriefing({ business: "", style: "", effects: "", creative: "" });
   };
 
   return (
@@ -988,6 +924,20 @@ export default function VideoTo3DAnimator() {
                       setBriefing(b => ({ ...b, effects: v }));
                     }}
                     placeholder="e.g. Particles forming a car shape, then exploding into sparks, morphing into an engine. Heavy bloom/glow. Camera orbits slowly."
+                    rows={3}
+                    style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical" }}
+                  />
+                </div>
+
+                {/* Q4: Creative Direction (free-form) */}
+                <div>
+                  <label style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 6 }}>
+                    Creative direction <span style={{ color: theme.textMuted, fontWeight: 400 }}>(optional — speak freely)</span>
+                  </label>
+                  <textarea
+                    value={briefing.creative}
+                    onChange={(e) => setBriefing(b => ({ ...b, creative: e.target.value }))}
+                    placeholder="e.g. Make it absolutely insane. I want people to feel like they're flying through space. Heavy glow, dramatic camera sweeps, particles should feel alive."
                     rows={3}
                     style={{ width: "100%", padding: "12px 14px", borderRadius: 8, background: theme.surface, border: `1px solid ${theme.border}`, color: theme.text, fontSize: 13, fontFamily: font, outline: "none", resize: "vertical" }}
                   />
