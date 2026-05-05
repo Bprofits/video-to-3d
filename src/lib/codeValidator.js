@@ -78,13 +78,13 @@ export function validateAndFixCode(html) {
   }
 
   // ──────────────────────────────────────────────
-  // 2. Fix particle size too large with sizeAttenuation
+  // 2. Fix absurdly large particle sizes (> 100 only — smaller values are intentional)
   // ──────────────────────────────────────────────
   fixed = fixed.replace(
-    /size:\s*([2-9]|[1-9]\d+)\s*,([^}]*?)sizeAttenuation:\s*true/gs,
+    /size:\s*([1-9]\d{2,})\s*,([^}]*?)sizeAttenuation:\s*true/gs,
     (match, size, between) => {
-      fixes.push(`Reduced particle size from ${size} to 0.15`);
-      return 'size: 0.15,' + between + 'sizeAttenuation: true';
+      fixes.push(`Reduced absurd particle size from ${size} to 2`);
+      return 'size: 2,' + between + 'sizeAttenuation: true';
     }
   );
 
@@ -136,16 +136,16 @@ export function validateAndFixCode(html) {
   }
 
   // ──────────────────────────────────────────────
-  // 7. Fix canvas ID mismatch
+  // 7. Fix canvas ID mismatch (only in WebGLRenderer constructor context)
   // ──────────────────────────────────────────────
-  const canvasGetId = fixed.match(/getElementById\(['"]([^'"]+)['"]\)/);
   const canvasTag = fixed.match(/<canvas[^>]*id=['"]([^'"]+)['"]/);
-  if (canvasGetId && canvasTag && canvasGetId[1] !== canvasTag[1]) {
+  const rendererCanvasMatch = fixed.match(/WebGLRenderer\s*\(\s*\{[^}]*canvas\s*:\s*document\.getElementById\(['"]([^'"]+)['"]\)/);
+  if (canvasTag && rendererCanvasMatch && canvasTag[1] !== rendererCanvasMatch[1]) {
     fixed = fixed.replace(
-      "getElementById('" + canvasGetId[1] + "')",
-      "getElementById('" + canvasTag[1] + "')"
+      new RegExp(`(WebGLRenderer\\s*\\(\\s*\\{[^}]*canvas\\s*:\\s*document\\.getElementById\\(['"]))${escapeRegex(rendererCanvasMatch[1])}(['"]\\))`),
+      `$1${canvasTag[1]}$2`
     );
-    fixes.push('Fixed canvas ID mismatch');
+    fixes.push(`Fixed canvas ID mismatch: "${rendererCanvasMatch[1]}" → "${canvasTag[1]}"`);
   }
 
   // ──────────────────────────────────────────────
@@ -167,14 +167,15 @@ export function validateAndFixCode(html) {
   }
 
   // ──────────────────────────────────────────────
-  // 10. Verify animate() is called (most common black screen cause)
+  // 10. Verify animate() is called — only inject if function is defined AND not yet called
   // ──────────────────────────────────────────────
   if (fixed.includes('requestAnimationFrame')) {
-    // Check the animate function is actually invoked at the end
-    const hasAnimateCall = /\banimate\s*\(\s*\)\s*;/.test(fixed);
+    const hasAnimateFn = /\bfunction\s+animate\b|const\s+animate\s*=\s*(?:function|\()/.test(fixed);
+    const bodyStripped = fixed.replace(/\bfunction\s+animate\b[\s\S]*?(?=\n\w|\n\/\/|\n<\/script>)/g, '');
+    const hasAnimateCall = /\banimate\s*\(\s*\)/.test(bodyStripped);
     const hasRenderCall = /renderer\.render\s*\(/.test(fixed);
-    if (!hasAnimateCall) {
-      // Inject animate() call before </script>
+
+    if (hasAnimateFn && !hasAnimateCall) {
       fixed = fixed.replace(/<\/script>/i, '\nanimate();\n<\/script>');
       fixes.push('Added missing animate() call');
     }
@@ -198,14 +199,36 @@ export function validateAndFixCode(html) {
   }
 
   // ──────────────────────────────────────────────
-  // 12. Detect deprecated THREE.Geometry / THREE.Face3 (removed in r125+)
+  // 12. Inject scene.background if missing (transparent default = broken preview)
+  // ──────────────────────────────────────────────
+  if (fixed.includes('new THREE.Scene()') && !fixed.includes('scene.background')) {
+    fixed = fixed.replace(
+      /const\s+scene\s*=\s*new THREE\.Scene\(\)\s*;/,
+      'const scene = new THREE.Scene();\nscene.background = new THREE.Color(0x000000);'
+    );
+    fixes.push('Added missing scene.background (transparent default breaks preview)');
+  }
+
+  // ──────────────────────────────────────────────
+  // 13. Detect camera stuck at origin — inject default position
+  // ──────────────────────────────────────────────
+  if (fixed.includes('PerspectiveCamera') && !fixed.includes('camera.position')) {
+    fixed = fixed.replace(
+      /const\s+camera\s*=\s*new THREE\.PerspectiveCamera\([^)]+\)\s*;/,
+      (match) => match + '\ncamera.position.set(0, 2, 8);'
+    );
+    fixes.push('Added missing camera.position (camera at origin sees nothing)');
+  }
+
+  // ──────────────────────────────────────────────
+  // 14. Detect deprecated THREE.Geometry / THREE.Face3 (removed in r125+)
   // ──────────────────────────────────────────────
   if (fixed.includes('new THREE.Geometry(') || fixed.includes('new THREE.Face3(')) {
     fixes.push('WARNING: Deprecated THREE.Geometry/Face3 detected — use BufferGeometry instead');
   }
 
   // ──────────────────────────────────────────────
-  // 13. Detect new THREE.* allocation inside animation loops
+  // 15. Detect new THREE.* allocation inside animation loops
   // ──────────────────────────────────────────────
   const animLoopMatch = fixed.match(/function\s+animate\s*\([^)]*\)\s*\{([\s\S]*?)\n\s*\}/);
   if (animLoopMatch) {
@@ -214,6 +237,46 @@ export function validateAndFixCode(html) {
     if (allocInLoop) {
       fixes.push(`WARNING: ${allocInLoop.length} THREE object allocation(s) inside animate loop — causes GC pressure`);
     }
+  }
+
+  // ──────────────────────────────────────────────
+  // 16. Inject resize handler when missing (scroll without resize = broken aspect ratio)
+  // ──────────────────────────────────────────────
+  if (fixed.includes("addEventListener('scroll'") || fixed.includes('addEventListener("scroll"')) {
+    if (!fixed.includes("addEventListener('resize'") && !fixed.includes('addEventListener("resize"')) {
+      fixed = fixed.replace(
+        /window\.addEventListener\(\s*['"]scroll['"]/,
+        `window.addEventListener('resize', function() {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+}, { passive: true });
+window.addEventListener('scroll'`
+      );
+      fixes.push('Added missing resize handler (prevents distorted aspect ratio on window resize)');
+    }
+  }
+
+  // ──────────────────────────────────────────────
+  // 17. Inject WebGL context loss handler (mobile GPU eviction safety)
+  // ──────────────────────────────────────────────
+  if (fixed.includes('WebGLRenderer') && !fixed.includes('webglcontextlost')) {
+    fixed = fixed.replace(
+      /renderer\.setSize\(/,
+      `renderer.domElement.addEventListener('webglcontextlost', function(e) { e.preventDefault(); }, false);\nrenderer.setSize(`
+    );
+    fixes.push('Added WebGL context loss handler (prevents silent black screen on mobile GPU eviction)');
+  }
+
+  // ──────────────────────────────────────────────
+  // 18. Wrap renderer.render() in try/catch — unhandled WebGL errors kill the loop
+  // ──────────────────────────────────────────────
+  if (fixed.includes('renderer.render(scene, camera)') && !fixed.includes('try {')) {
+    fixed = fixed.replace(
+      /renderer\.render\(scene,\s*camera\)/g,
+      `(function() { try { renderer.render(scene, camera); } catch(e) { parent.postMessage({ type: 'threejs-error', message: 'Render error: ' + e.message }, '*'); } })()`
+    );
+    fixes.push('Wrapped renderer.render() in try/catch (prevents animate loop death on WebGL error)');
   }
 
   return { html: fixed, fixes };

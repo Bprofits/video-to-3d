@@ -188,16 +188,29 @@ function calculateFrameStats(imageData) {
 }
 
 // -----------------------------------------------
-// CLAUDE API
+// CLAUDE API — streaming SSE with extended thinking
+// onProgress(message, pct?) called as tokens arrive
 // -----------------------------------------------
-async function callClaude(apiKey, messages, maxTokens, system) {
-  const body = { model: "claude-opus-4-20250514", max_tokens: maxTokens, messages };
+async function callClaudeStreaming(apiKey, messages, maxTokens, system, { onProgress, signal } = {}) {
+  const body = {
+    model: "claude-opus-4-7",
+    max_tokens: maxTokens,
+    messages,
+    stream: true,
+    thinking: { type: "enabled" },
+  };
   if (system) body.system = system;
 
-  const response = await fetch("/api/claude", {
+  const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
     body: JSON.stringify(body),
+    signal,
   });
 
   if (!response.ok) {
@@ -205,15 +218,56 @@ async function callClaude(apiKey, messages, maxTokens, system) {
     throw new Error(`API error ${response.status}: ${errText}`);
   }
 
-  const data = await response.json();
-  return data.content?.map((c) => c.text || "").join("") || "";
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let accumulated = "";
+  let currentBlockType = null;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const data = line.slice(6).trim();
+        if (!data || data === "[DONE]") continue;
+        try {
+          const event = JSON.parse(data);
+          if (event.type === "content_block_start") {
+            currentBlockType = event.content_block?.type;
+            if (currentBlockType === "thinking") onProgress?.("Reasoning through the scene...", 10);
+            else if (currentBlockType === "text") onProgress?.("Writing Three.js code...", 25);
+          } else if (event.type === "content_block_delta" && currentBlockType === "text" && event.delta?.type === "text_delta") {
+            accumulated += event.delta.text;
+            if (accumulated.length % 800 < event.delta.text.length) {
+              const pct = Math.min(25 + (accumulated.length / 40000) * 65, 90);
+              onProgress?.(`Writing Three.js code... (~${Math.round(accumulated.length / 4)} tokens)`, pct);
+            }
+          } else if (event.type === "message_delta" && event.usage) {
+            onProgress?.(`${event.usage.output_tokens} tokens — validating...`, 92);
+          }
+        } catch { /* skip malformed SSE events */ }
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  if (!accumulated) throw new Error("No text content in Claude response");
+  return accumulated;
 }
 
 // -----------------------------------------------
 // SINGLE-STAGE GENERATION
 // Frames + briefing + skills → complete HTML in one Opus call
 // -----------------------------------------------
-async function generateFromVideo(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress) {
+async function generateFromVideo(frames, duration, apiKey, videoWidth, videoHeight, briefing, onProgress, signal) {
   const motionSummary = frames.map((f, i) =>
     `Frame ${i + 1} (t=${f.time.toFixed(1)}s): motion=${f.motion.magnitude.toFixed(2)} brightness=${f.brightness.toFixed(2)}`
   ).join("\n");
@@ -223,9 +277,9 @@ async function generateFromVideo(frames, duration, apiKey, videoWidth, videoHeig
     { type: "text", text: `Frame ${i + 1} at t=${f.time.toFixed(1)}s` },
   ]).flat();
 
-  onProgress("Analyzing video + generating Three.js visual FX...");
+  onProgress("Sending frames to Claude...", 5);
 
-  const rawHTML = await callClaude(apiKey, [{
+  const rawHTML = await callClaudeStreaming(apiKey, [{
     role: "user",
     content: [
       ...imageBlocks,
@@ -239,82 +293,96 @@ ${motionSummary}
 USER BRIEFING:
 - Business/Context: ${briefing.business || "Not specified — use your best judgment from the video"}
 - Visual Style: ${briefing.style || "Match the video's aesthetic — study the colors, mood, lighting"}
-- Desired Effects: ${briefing.effects || "Recreate the visual experience from the video using the best Three.js techniques"}
+- Desired Effects: ${briefing.effects || "Capture the visual energy of the video using the best Three.js techniques"}
 ${briefing.creative ? `- Creative Direction: ${briefing.creative}` : ""}
 
-YOUR TASK: Generate a COMPLETE, production-quality, single-file HTML page that recreates the visual experience from this video as a scroll-driven Three.js masterpiece.
+YOUR TASK: Generate a COMPLETE, production-quality, single-file HTML page INSPIRED BY this video — capturing its mood, palette, and key visual themes as a scroll-driven Three.js masterpiece.
 
-Study the video frames carefully and determine:
-1. The color palette (extract exact hex colors from the dominant tones)
-2. What's actually in the video — objects, scenes, environments, effects
-3. The mood and atmosphere (dark, bright, neon, cinematic, natural, abstract)
-4. Camera movements (orbits, dollies, crane shots, tracking)
-5. Transitions between scenes (morphs, fades, cuts, dissolves)
+Study the video frames to extract:
+1. Dominant color palette (pull exact hex tones from the frames)
+2. Overall mood and atmosphere (dark, bright, neon, cinematic, natural, abstract)
+3. Key visual subjects or themes (people, nature, tech, vehicles, abstract motion)
+4. Energy level (fast/kinetic vs slow/atmospheric)
 
-THEN choose the RIGHT Three.js techniques to recreate it. DO NOT default to particles.
-- If the video shows a landscape: build terrain geometry with noise displacement
-- If it shows snowfall: use falling particle system with drift and reset
-- If it shows a car: build it from grouped geometry (boxes, cylinders), not random particles
-- If it shows abstract art: use shader materials, noise displacement, organic shapes
-- If it shows architecture: use instanced meshes, clean geometry, shadows
-- If it shows space: use star field particles, planet spheres, nebula fog
-- If it shows nature: use terrain, trees (cones+cylinders), water plane with animated vertices
-- If it shows data/tech: use grid patterns, circuit lines, glowing wireframes, data streams
-- If it shows particles: THEN use particles, with soft sprite textures and additive blending
-MIX techniques freely. A scene can have terrain + particles + geometry + fog all at once.
+THEN choose the RIGHT Three.js techniques. DO NOT default to particles for everything.
+- Landscape/nature: terrain geometry with noise displacement, instanced trees, water plane
+- Snowfall/rain/particles: falling particle system with drift and reset
+- Vehicles/objects: grouped geometry (boxes, cylinders, cones), not random particles
+- Abstract/psychedelic: shader materials, noise displacement, organic blob morphing
+- Architecture/urban: instanced meshes, clean geometry, grid patterns, shadows
+- Space/cosmic: star field particles, planet spheres, nebula fog volumes
+- Data/tech: circuit grid patterns, glowing wireframes, data stream particles
+- Particles in video: THEN use particles with CanvasTexture sprites and additive blending
+MIX techniques freely — terrain + particles + geometry + fog is a great combo.
 
-THIS IS A PURE VISUAL FX PAGE — NO TEXT, NO HEADINGS, NO PARAGRAPHS, NO WEB DESIGN.
-The ENTIRE page is just the Three.js canvas filling the screen with scroll-driven visual effects.
+THIS IS A PURE VISUAL FX PAGE — NO TEXT, NO HEADINGS, NO PARAGRAPHS, NO BUTTONS.
+The ENTIRE page is a fullscreen Three.js canvas with scroll-driven visual effects.
 
-REQUIREMENTS:
-1. Scroll-driven — scrolling progresses through the visual experience (800vh scroll spacer)
-2. FULLSCREEN Three.js canvas — NO HTML text whatsoever
-3. Use ONLY vanilla Three.js from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
-4. Single HTML file, inline CSS and JS, works on file:// protocol
+HARD REQUIREMENTS (violations cause black screen or crash):
+1. Scroll-driven: scrolling progresses the visual (800vh scroll spacer)
+2. Fullscreen canvas id="bg": position:fixed; top:0; left:0; width:100%; height:100%
+3. Three.js ONLY from CDN: https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js
+4. Single HTML file, inline CSS and JS
+5. camera.position MUST be set to a non-zero value before rendering — e.g., camera.position.set(0, 2, 8). A camera at (0,0,0) looking at the origin sees nothing.
+6. scene.background MUST be set to a THREE.Color — e.g., scene.background = new THREE.Color(0x000000). Never leave it undefined.
+7. NEVER use THREE.TextureLoader to load external image URLs — all textures must be CanvasTexture or DataTexture (generated in code). External fetches are blocked in the preview sandbox.
+8. ALL geometry must be positioned WITHIN camera view — check that object positions and camera distance are compatible. Objects at z=0 with camera at z=8 looking at origin are visible; objects at z=500 are not.
 
-PREMIUM VISUAL QUALITY:
-- 3-point lighting rig: key + colored fill + rim + ambient
-- Orbiting colored spotlights (sin/cos position in animate loop)
-- FogExp2 or Fog for depth atmosphere
-- easeInOutCubic on ALL transitions — never linear lerp
+PREMIUM QUALITY:
+- 3-point lighting: key + colored fill + rim + ambient
+- Orbiting spotlights: spot.position.x = Math.sin(elapsed * 0.5) * 10
+- FogExp2 or Fog for depth
+- easeInOutCubic on ALL transitions — NEVER linear lerp
 - Dynamic light pulsing: intensity = base + Math.sin(elapsed * 2) * 0.3
-- Mouse parallax on camera group for subtle interactivity
-- Shadows enabled where appropriate (castShadow, receiveShadow)
-- Ground plane with appropriate material (reflective, grassy, snowy — match the scene)
-- Ambient background elements (dust particles, stars, snowflakes — match the mood)
-- Accent geometry (wireframe shapes, flowing tubes, orbiting rings — match the aesthetic)
-- If using particles: 15000+ with CanvasTexture soft sprite, AdditiveBlending, depthWrite:false
+- Mouse parallax on camera group
+- If particles: 15000+ count, CanvasTexture soft sprite, AdditiveBlending, depthWrite:false
 
 SCROLL ANIMATION:
-- Map scrollProgress 0-1 to scene progression
-- Each transition block uses block-scoped const t with easeInOutCubic
-- Camera keyframes interpolated with lerp based on scrollProgress
+- Map scrollProgress 0-1 across distinct scene phases
+- Block-scoped const t = easeInOutCubic(...) per transition
+- Interpolate camera position + lookAt between keyframes
 
-HTML STRUCTURE:
-body: margin:0; overflow-x:hidden; background:matched-to-scene
-  canvas id="bg": position:fixed; top:0; left:0; width:100%; height:100%
-  div: height:800vh (invisible scroll spacer)
+HTML STRUCTURE (exact):
+html > head (Three.js CDN script) > body
+body { margin:0; overflow-x:hidden; background:#000 }
+canvas#bg { position:fixed; top:0; left:0; width:100%; height:100% }
+div { height:800vh } (scroll spacer, no other content)
 
-VARIABLE NAMING RULES (CRITICAL — violations crash the page):
-- NEVER declare two variables with the same name at the top level
-- Use UNIQUE descriptive names: 'palette' not 'colors', 'particleColors' not 'colors'
-- Every variable in updateScene/animate MUST be declared in accessible scope
-- NEVER allocate new THREE objects inside animation loops
-- Block-scoped const/let in if/else blocks CAN reuse names
+VARIABLE NAMING (CRITICAL — collisions crash the page):
+- NEVER redeclare a variable name at the top level
+- Use descriptive unique names: particleMat not mat, terrainGeo not geo
+- NEVER allocate new THREE objects inside the animation loop
+- Block-scoped const/let inside if/else CAN reuse names
 
-YOU MUST include a working requestAnimationFrame loop that calls renderer.render(scene, camera).
-YOU MUST call animate() at the end of the script to start the loop.
+YOU MUST define a function named animate() containing the requestAnimationFrame loop and renderer.render(scene, camera) call.
+YOU MUST call animate() at the very end of the script.
 
-EXCEED EXPECTATIONS. Make something that makes people stop and stare.
+TECHNIQUE PRIORITY: Geometry first — particles are accent, not default.
+- Build objects from actual geometry (boxes, cones, planes, spheres) whenever the video shows a recognizable subject
+- Only use particles as the primary element when the video is abstract/atmospheric
+- Objects should fit within a ±15 unit bounding box around the origin (camera at 0,2,8 has this in view)
+
+LIGHTING: If you use MeshStandardMaterial, MeshPhongMaterial, or MeshLambertMaterial, you MUST add at least one DirectionalLight or PointLight. MeshBasicMaterial ignores lights (flat/unlit) — never use it as your primary material. NEVER use only MeshBasicMaterial.
+
+SCENE PLAN — Write a brief plan as JS comments at the top of the script (10 lines max):
+// PALETTE: [4-6 dominant hex colors from the frames]
+// MOOD: [one phrase]
+// TECHNIQUE: [primary approach + why]
+// PHASES: [0-0.33 → ..., 0.33-0.67 → ..., 0.67-1.0 → ...]
+// CAMERA: [start position → movement arc]
+These comments stay in the output — they become useful documentation.
+
 Write the COMPLETE HTML. Start with <!DOCTYPE html>, end with </html>.
-No explanations, no markdown fences, no preamble. JUST the code.`
+No explanations. No markdown. No preamble. Output ONLY the code.`
       }
     ]
-  }], 32000,
-  `You are a world-class Three.js visual effects developer. You create award-winning scroll-driven visual experiences.\n\n${THREEJS_SKILLS}`
+  }],
+  32000,
+  `You are a world-class Three.js visual effects developer. You create award-winning scroll-driven visual experiences.\n\n${THREEJS_SKILLS}`,
+  { onProgress, signal }
   );
 
-  onProgress("Validating and fixing code...");
+  onProgress("Validating and fixing code...", 92);
 
   let html = rawHTML.replace(/```html|```/g, "").trim();
   const docIdx = html.indexOf("<!DOCTYPE");
@@ -330,22 +398,30 @@ No explanations, no markdown fences, no preamble. JUST the code.`
 }
 
 // REFINEMENT
-async function refineCode(currentHTML, issueDescription, apiKey) {
-  const refined = await callClaude(apiKey, [{
+async function refineCode(currentHTML, issueDescription, apiKey, onProgress, signal) {
+  const refined = await callClaudeStreaming(apiKey, [{
     role: "user",
-    content: `Here is a Three.js scroll-driven PURE VISUAL FX page. It has issues:
+    content: `Here is a Three.js scroll-driven PURE VISUAL FX page that needs changes:
 
-ISSUES: ${issueDescription}
+REQUESTED CHANGES: ${issueDescription}
 
 CURRENT CODE:
 ${currentHTML}
 
-Fix the issues. Keep the overall structure. PURE VISUAL FX — no text, no headings, no HTML overlays.
-YOU MUST include a working requestAnimationFrame loop with renderer.render(scene, camera).
-YOU MUST call animate() at the end to start the loop.
+Apply the requested changes. Keep the overall structure and visual theme.
+HARD REQUIREMENTS (must remain satisfied):
+- PURE VISUAL FX — no text, no headings, no HTML overlays, fullscreen canvas only
+- camera.position must be set to a non-zero value
+- scene.background must be set to a THREE.Color
+- No THREE.TextureLoader with external URLs — CanvasTexture/DataTexture only
+- function animate() must contain the requestAnimationFrame loop and renderer.render(scene, camera)
+- animate() must be called at the very end of the script
+- No duplicate top-level variable declarations
 Return the COMPLETE fixed HTML starting with <!DOCTYPE html>.`
-  }], 32000,
-  `You are a Three.js expert fixing code issues.\n\n${THREEJS_SKILLS}`
+  }],
+  32000,
+  `You are a Three.js expert refining visual FX code.\n\n${THREEJS_SKILLS}`,
+  { onProgress, signal }
   );
 
   let html = refined.replace(/```html|```/g, "").trim();
@@ -416,6 +492,8 @@ export default function VideoTo3DAnimator() {
   const [iframeErrors, setIframeErrors] = useState([]);
   const [history, setHistory] = useState([]);     // previous generations
   const [historyIdx, setHistoryIdx] = useState(-1); // -1 = current (latest)
+  const latestHTMLRef = useRef(null);              // always holds the most recent generation
+  const abortControllerRef = useRef(null);         // cancellation for in-flight requests
 
   const fileInputRef = useRef(null);
   const iframeRef = useRef(null);
@@ -435,6 +513,13 @@ export default function VideoTo3DAnimator() {
     return () => window.removeEventListener("message", handler);
   }, []);
 
+  // ── Imperative srcdoc update — avoids React re-mounting the iframe DOM node ──
+  useEffect(() => {
+    if (iframeRef.current && cameraData) {
+      iframeRef.current.srcdoc = cameraData;
+    }
+  }, [cameraData]);
+
   // ── Forward scroll events into iframe ──
   useEffect(() => {
     if (stage !== "playing" || showCode || !iframeRef.current) return;
@@ -444,7 +529,6 @@ export default function VideoTo3DAnimator() {
         iframe.contentWindow.postMessage({ type: "scroll-forward", deltaY: e.deltaY }, "*");
       }
     };
-    // Attach to the iframe's parent container
     const container = iframe.parentElement;
     if (container) container.addEventListener("wheel", handler, { passive: true });
     return () => { if (container) container.removeEventListener("wheel", handler); };
@@ -479,20 +563,20 @@ export default function VideoTo3DAnimator() {
     localStorage.setItem("anthropic_api_key", apiKey);
     setError(null);
     setStage("analyzing");
-    setProgress(0);
-    setStatusMsg("Starting analysis...");
+    setProgress(5);
+    setStatusMsg("Sending frames to Claude...");
 
-    const progressTimer = setInterval(() => {
-      setProgress((p) => Math.min(p + Math.random() * 4, 92));
-    }, 600);
+    abortControllerRef.current = new AbortController();
 
     try {
-      const result = await generateFromVideo(frames, duration, apiKey, videoSize.w, videoSize.h, briefing, (msg) => {
-        setStatusMsg(msg);
-      });
-      clearInterval(progressTimer);
+      const result = await generateFromVideo(
+        frames, duration, apiKey, videoSize.w, videoSize.h, briefing,
+        (msg, pct) => { setStatusMsg(msg); if (pct !== undefined) setProgress(pct); },
+        abortControllerRef.current.signal
+      );
       setProgress(100);
       const injected = injectIframeBridge(result.html);
+      latestHTMLRef.current = injected;
       setCameraData(injected);
       setAutoFixes(result.fixes || []);
       setIframeErrors([]);
@@ -500,7 +584,7 @@ export default function VideoTo3DAnimator() {
       setHistoryIdx(-1);
       setTimeout(() => setStage("playing"), 300);
     } catch (e) {
-      clearInterval(progressTimer);
+      if (e.name === "AbortError") { setStage("briefing"); return; }
       setError("Generation failed: " + e.message);
       setStage("briefing");
     }
@@ -510,17 +594,20 @@ export default function VideoTo3DAnimator() {
   const handleRefine = useCallback(async () => {
     if (!refineText.trim() || !apiKey) return;
     setStage("analyzing");
-    setProgress(0);
+    setProgress(5);
     setStatusMsg("Refining visual FX...");
-    const pt = setInterval(() => setProgress(p => Math.min(p + Math.random() * 6, 92)), 500);
+    abortControllerRef.current = new AbortController();
     try {
-      const rawFixed = await refineCode(cameraData, refineText.trim(), apiKey);
+      const rawFixed = await refineCode(
+        cameraData, refineText.trim(), apiKey,
+        (msg, pct) => { setStatusMsg(msg); if (pct !== undefined) setProgress(pct); },
+        abortControllerRef.current.signal
+      );
       const { html: validated } = validateAndFixCode(rawFixed);
-      clearInterval(pt);
       setProgress(100);
-      // Save current version to history before replacing
-      setHistory(prev => [...prev.slice(-4), cameraData]); // keep last 5
+      setHistory(prev => [...prev.slice(-4), cameraData]);
       const injected = injectIframeBridge(validated);
+      latestHTMLRef.current = injected;
       setCameraData(injected);
       setHistoryIdx(-1);
       setIframeErrors([]);
@@ -528,7 +615,7 @@ export default function VideoTo3DAnimator() {
       setShowRefine(false);
       setTimeout(() => setStage("playing"), 300);
     } catch (e) {
-      clearInterval(pt);
+      if (e.name === "AbortError") { setStage("playing"); return; }
       setError("Refinement failed: " + e.message);
       setStage("playing");
     }
@@ -738,11 +825,16 @@ export default function VideoTo3DAnimator() {
             <div style={{ width: 56, height: 56, borderRadius: 14, background: theme.accentGlow, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24, animation: "pulse 1.5s ease-in-out infinite" }}>&#129504;</div>
             <style>{`@keyframes pulse { 0%,100% { opacity:0.7; transform:scale(1); } 50% { opacity:1; transform:scale(1.05); } }`}</style>
             <div style={{ fontSize: 16, fontWeight: 600 }}>Claude Opus is creating...</div>
-            <div style={{ fontSize: 13, color: theme.accent, textAlign: "center" }}>{statusMsg}</div>
+            <div style={{ fontSize: 13, color: theme.accent, textAlign: "center", maxWidth: 340 }}>{statusMsg}</div>
             <div style={{ width: 320, maxWidth: "100%", height: 4, background: theme.surface, borderRadius: 2, overflow: "hidden" }}>
-              <div style={{ height: "100%", width: `${progress}%`, background: `linear-gradient(90deg, ${theme.accent}, #ff9933)`, borderRadius: 2, transition: "width 0.3s" }} />
+              <div style={{ height: "100%", width: `${progress}%`, background: `linear-gradient(90deg, ${theme.accent}, #ff9933)`, borderRadius: 2, transition: "width 0.6s ease" }} />
             </div>
             <div style={{ fontSize: 11, color: theme.textMuted, fontFamily: "monospace" }}>{progress.toFixed(0)}%</div>
+            <button onClick={() => { abortControllerRef.current?.abort(); }} style={{
+              marginTop: 4, padding: "6px 20px", borderRadius: 8,
+              background: "transparent", border: `1px solid ${theme.border}`,
+              color: theme.textMuted, fontSize: 12, cursor: "pointer", fontFamily: font,
+            }}>Cancel</button>
           </div>
         )}
 
@@ -818,8 +910,7 @@ export default function VideoTo3DAnimator() {
                         setCameraData(history[historyIdx + 1]);
                       } else if (historyIdx === history.length - 1) {
                         setHistoryIdx(-1);
-                        // Restore to latest (which was saved when refine happened)
-                        // The latest is the current refined version — need to track it
+                        setCameraData(latestHTMLRef.current);
                       }
                       setIframeErrors([]);
                     }} disabled={historyIdx === -1} style={{
@@ -876,7 +967,7 @@ export default function VideoTo3DAnimator() {
             {/* Preview or Code */}
             {!showCode ? (
               <div style={{ flex: 1, position: "relative" }}>
-                <iframe ref={iframeRef} srcDoc={cameraData} style={{ width: "100%", height: "100%", border: "none", minHeight: 500 }}
+                <iframe ref={iframeRef} style={{ width: "100%", height: "100%", border: "none", minHeight: 500 }}
                   sandbox="allow-scripts" title="Preview" />
                 <div style={{
                   position: "absolute", bottom: 12, right: 12, background: "rgba(0,0,0,.7)",

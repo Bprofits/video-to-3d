@@ -11,7 +11,9 @@ export const THREEJS_SKILLS = `
 
 ## Scene Setup
 const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000); // ALWAYS set — undefined background = broken preview
 const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+camera.position.set(0, 2, 8); // ALWAYS set non-zero position — camera at origin sees nothing
 const renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('bg'), antialias: true });
 renderer.setSize(innerWidth, innerHeight);
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
@@ -122,13 +124,44 @@ scene.fog = new THREE.FogExp2(bgColor, 0.015);
 // OR scene.fog = new THREE.Fog(bgColor, near, far);
 // Reflective floor: PlaneGeometry + MeshStandardMaterial({ metalness:0.95, roughness:0.05 })
 
-## SCROLL-DRIVEN ANIMATION
+## PERFORMANCE — follow these patterns in every generated scene
+
+### Clock-based animation (frame-rate independent — ALWAYS use this)
+const clock = new THREE.Clock();
+// In animate loop:
+const elapsed = clock.getElapsedTime(); // total seconds since start
+const delta = clock.getDelta();         // seconds since last frame — use for velocity
+
+### Scroll listener (read into variable, NEVER read scrollY inside the render loop)
 let scrollProgress = 0;
 window.addEventListener('scroll', function() {
   const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
   const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
   scrollProgress = scrollHeight > 0 ? Math.max(0, Math.min(1, scrollTop / scrollHeight)) : 0;
 }, { passive: true });
+
+### Memory cleanup (prevents leaks in long-running sessions)
+window.addEventListener('beforeunload', function() {
+  scene.traverse(function(obj) {
+    if (obj.geometry) obj.geometry.dispose();
+    if (obj.material) {
+      if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+      else obj.material.dispose();
+    }
+  });
+  renderer.dispose();
+});
+
+### InstancedMesh for repeated geometry (use instead of hundreds of individual meshes)
+const instancedMesh = new THREE.InstancedMesh(geo, mat, count);
+const dummy = new THREE.Object3D();
+// In setup loop:
+dummy.position.set(x, y, z); dummy.updateMatrix();
+instancedMesh.setMatrixAt(i, dummy.matrix);
+instancedMesh.instanceMatrix.needsUpdate = true;
+scene.add(instancedMesh);
+
+## SCROLL-DRIVEN ANIMATION
 
 ## EASING
 function easeInOutCubic(t) { return t<0.5 ? 4*t*t*t : 1-Math.pow(-2*t+2,3)/2; }
